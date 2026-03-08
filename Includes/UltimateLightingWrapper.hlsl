@@ -68,8 +68,7 @@ float dot01(float3 a, float3 b)
 LightInputs GetLightInputs(float3 normalWS, float3 viewDirectionWS, float3 lightDirection)
 {
     LightInputs inputs;
-    //added small number to prevent dividing by 0
-    float3 H = normalize(lightDirection + viewDirectionWS + 0.00001);
+    float3 H = SafeNormalize(lightDirection + viewDirectionWS);
     inputs.NoL = dot01(normalWS, lightDirection);
     inputs.NoH = dot01(normalWS, H);
     inputs.VoH = dot01(viewDirectionWS, H);
@@ -137,7 +136,7 @@ void EvaluateLighting(float3 albedo, float perceptualRoughness, float alpha, flo
     float V = 0.5 / max(visDenominator, 1e-5);
 
     //schlick fresnel using exp2
-    float3 F = f0 + (1.0 - f0) * exp2(-5.55473 * inputs.VoH - 6.98316 * inputs.VoH); 
+    float3 F = f0 + (1.0 - f0) * exp2((-5.55473 * inputs.VoH - 6.98316) * inputs.VoH); 
 
     float3 specular = max(0.0, D * V * F);
     
@@ -149,7 +148,10 @@ void EvaluateLighting(float3 albedo, float perceptualRoughness, float alpha, flo
         float wrap = lambertDiffuseWrap;
         float wrappedNoL = saturate((unclampedNoL + wrap) / ((1.0 + wrap) * (1.0 + wrap)));
 
-        float3 diffuseRadiance = light.color * (light.distanceAttenuation * shadowAttenuation) * wrappedNoL;
+        float terminatorMask = smoothstep(-0.1, 0.2, unclampedNoL);
+        float stylizedShadow = lerp(1.0, shadowAttenuation, terminatorMask);
+
+        float3 diffuseRadiance = light.color * (light.distanceAttenuation * stylizedShadow) * wrappedNoL;
 
         brdf.diffuse += diffuse * diffuseRadiance * PI;
     #else
@@ -295,7 +297,8 @@ void UltimateLitCustom_float(
 
     //environment BRDF
     float surfaceReduction = 1.0 / (alpha * alpha + 1.0);
-    float grazingTerm = saturate((1.0 - perceptualRoughness) + Metalness);
+    float reflectivity = max(max(f0.r, f0.g), f0.b);
+    float grazingTerm = saturate((1.0 - perceptualRoughness) + reflectivity);
     float3 envFresnel = f0 + (max(float3(grazingTerm, grazingTerm, grazingTerm), f0) - f0) * pow(1.0 - NoV, 5.0);
 
     float3 indirectSpecular = GetReflection(ViewDirectionWS, NormalWS, PositionWS, perceptualRoughness, ScreenSpaceUV);

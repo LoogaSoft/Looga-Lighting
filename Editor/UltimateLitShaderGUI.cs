@@ -116,8 +116,8 @@ public class UltimateLitShaderGUI : ShaderGUI
 
         DrawMainSurfaceInputs(materialEditor, materials, albedoMap, albedoColor, normalMap, normalStrength, emissionMap,
             emissiveColor, heightMap, heightStrength, maskMap, metallicMap, metallicChannel, metallicStrength, occlusionMap, 
-            occlusionChannel, occlusionStrength, detailBlendMap, detailBlendChannel, detailBlendOpacity, roughnessMap, 
-            roughnessChannel, roughnessStrength, invertRoughnessMap, tiling, offset);
+            occlusionChannel, occlusionStrength, detailBlendMap, detailBlendChannel, detailBlendOpacity, useVertexColorMask, 
+            roughnessMap, roughnessChannel, roughnessStrength, invertRoughnessMap, tiling, offset);
 
         EditorGUILayout.Space();
 
@@ -371,9 +371,9 @@ public class UltimateLitShaderGUI : ShaderGUI
         MaterialProperty heightMap, MaterialProperty heightStrength, MaterialProperty maskMap, 
         MaterialProperty metallicMap, MaterialProperty metallicChannel, MaterialProperty metallicStrength, 
         MaterialProperty occlusionMap, MaterialProperty occlusionChannel, MaterialProperty occlusionStrength, 
-        MaterialProperty detailBlendMask, MaterialProperty detailBlendChannel, MaterialProperty detailBlendStrength, 
-        MaterialProperty roughnessMap, MaterialProperty roughnessChannel, MaterialProperty roughnessStrength, 
-        MaterialProperty invertRoughness, MaterialProperty tiling, MaterialProperty offset)
+        MaterialProperty detailBlendMask, MaterialProperty detailBlendChannel, MaterialProperty detailBlendStrength,
+        MaterialProperty useVertexColorMask, MaterialProperty roughnessMap, MaterialProperty roughnessChannel, 
+        MaterialProperty roughnessStrength, MaterialProperty invertRoughness, MaterialProperty tiling, MaterialProperty offset)
     {
         GUILayout.Label("Surface Inputs", EditorStyles.boldLabel);
         
@@ -436,13 +436,18 @@ public class UltimateLitShaderGUI : ShaderGUI
                 mat.DisableKeyword(UseBaseMaskMap);
         }
 
+        bool usingVertexColorMask = useVertexColorMask != null && useVertexColorMask.floatValue > 0.5f;
+        
         if (hasBaseMask)
         {
             EditorGUILayout.BeginVertical();
             
             DrawChannelSelector(materialEditor, "Metallic", metallicChannel, metallicStrength);
             DrawChannelSelector(materialEditor, "Occlusion", occlusionChannel, occlusionStrength);
-            DrawChannelSelector(materialEditor, "Detail Blend Mask", detailBlendChannel, detailBlendStrength);
+            
+            if (!usingVertexColorMask)
+                DrawChannelSelector(materialEditor, "Detail Blend Mask", detailBlendChannel, detailBlendStrength);
+            
             DrawChannelSelector(materialEditor, "Roughness", roughnessChannel, roughnessStrength, invertRoughness);
             
             EditorGUILayout.EndVertical();
@@ -455,7 +460,7 @@ public class UltimateLitShaderGUI : ShaderGUI
                 materialEditor.TexturePropertySingleLine(new GUIContent("Metallic Map", "Metallic map"), metallicMap, metallicStrength);
             if (occlusionMap != null)
                 materialEditor.TexturePropertySingleLine(new GUIContent("Occlusion Map", "Occlusion map"), occlusionMap, occlusionStrength);
-            if (detailBlendMask != null)
+            if (detailBlendMask != null && !usingVertexColorMask)
                 materialEditor.TexturePropertySingleLine(new GUIContent("Detail Blend Mask", "Detail blend mask"), detailBlendMask, detailBlendStrength);
             if (roughnessMap != null)
                 materialEditor.TexturePropertySingleLine(new GUIContent("Roughness Map", "Roughness map"), roughnessMap, roughnessStrength);
@@ -497,7 +502,7 @@ public class UltimateLitShaderGUI : ShaderGUI
         DrawFeatureGroup(materials, "Detail", UseDetailMap, ref _expandDetailSettings, () =>
         {
             if (useVertexColorMask != null)
-                materialEditor.ShaderProperty(useVertexColorMask, new GUIContent("Use Vertex Color Mask", "Use vertex color mask (R) instead of detail albedo's alpha channel"));
+                materialEditor.ShaderProperty(useVertexColorMask, new GUIContent("Use Vertex Color Mask", "Use vertex color mask (R) to blend detail map"));
             if (detailAlbedoMap != null && detailAlbedoColor != null)
                 materialEditor.TexturePropertySingleLine(new GUIContent("Albedo Map", "Albedo map (Alpha = Detail Opacity)"), detailAlbedoMap, detailAlbedoColor);
             if (detailNormalMap != null)
