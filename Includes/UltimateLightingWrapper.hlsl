@@ -135,10 +135,20 @@ void EvaluateLighting(float3 albedo, float perceptualRoughness, float alpha, flo
                            NoV * sqrt(inputs.NoL * inputs.NoL * (1.0 - alpha2) + alpha2);
     float V = 0.5 / max(visDenominator, 1e-5);
 
-    //schlick fresnel using exp2
+    //schlick fresnel using exp2 (standard ggx)
     float3 F = f0 + (1.0 - f0) * exp2((-5.55473 * inputs.VoH - 6.98316) * inputs.VoH); 
-
     float3 specular = max(0.0, D * V * F);
+
+    //multiple scatter compensation (based on Fdez-Aguera method)
+    //calculate directional albedo to see how much light is bouncing in micro-grooves
+    float E = exp2((-7.353 * NoV - 1.284) * NoV) * (1.0 - perceptualRoughness) + perceptualRoughness;
+    float3 F_avg = f0 + (1.0 - f0) / 21.0;
+
+    //generate trapped light energy
+    float3 multiScatter = (F_avg * F_avg * E) / (1.0 - F_avg * (1.0 - E));
+
+    //add scattered light back to specular
+    specular += specular * multiScatter * (1.0 - E);
     
     float shadowAttenuation = lerp(1.0, light.shadowAttenuation, receiveShadows);
     float3 radiance = light.color * (light.distanceAttenuation * shadowAttenuation) * inputs.NoL;
