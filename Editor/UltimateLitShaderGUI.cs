@@ -34,6 +34,7 @@ public class UltimateLitShaderGUI : ShaderGUI
         MaterialProperty alphaClip = FindProperty("_AlphaClip", properties, false);
         MaterialProperty clipThreshold = FindProperty("_Cutoff", properties, false);
         MaterialProperty receiveShadows = FindProperty("_ReceiveShadows", properties, false);
+        MaterialProperty backfaceNormalMode = FindProperty("_Backface_Normal_Mode", properties, false);
         
         MaterialProperty albedoMap = FindProperty("_BaseMap", properties, false);
         MaterialProperty albedoColor = FindProperty("_BaseColor", properties, false);
@@ -110,7 +111,7 @@ public class UltimateLitShaderGUI : ShaderGUI
         
         EditorGUI.BeginChangeCheck();
 
-        DrawSurfaceOptions(materialEditor, surfaceType, blendMode, renderFaceType, alphaClip, clipThreshold, receiveShadows);
+        DrawSurfaceOptions(materialEditor, surfaceType, blendMode, renderFaceType, alphaClip, clipThreshold, receiveShadows, backfaceNormalMode);
 
         EditorGUILayout.Space();
 
@@ -244,7 +245,7 @@ public class UltimateLitShaderGUI : ShaderGUI
     }
     private static void DrawSurfaceOptions(MaterialEditor materialEditor, MaterialProperty surfaceType,
         MaterialProperty blendMode, MaterialProperty renderFaceType, MaterialProperty alphaClip, 
-        MaterialProperty clipThreshold, MaterialProperty receiveShadows)
+        MaterialProperty clipThreshold, MaterialProperty receiveShadows, MaterialProperty backfaceNormalMode)
     {
         GUILayout.Label("Surface Options", EditorStyles.boldLabel);
         
@@ -338,6 +339,19 @@ public class UltimateLitShaderGUI : ShaderGUI
             val = EditorGUILayout.Popup("Render Face", val, renderFaceTypes);
             if (EditorGUI.EndChangeCheck())
                 renderFaceType.floatValue = val;
+
+            //if rendering both faces and backfaceNormalMode exists
+            if (val == 0 && backfaceNormalMode != null)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUI.BeginChangeCheck();
+                string[] backfaceNormalModes = { "Flip", "Mirror" };
+                int backfaceVal = (int)backfaceNormalMode.floatValue;
+                backfaceVal = EditorGUILayout.Popup("Backface Normal Mode", backfaceVal, backfaceNormalModes);
+                if (EditorGUI.EndChangeCheck())
+                    backfaceNormalMode.floatValue = backfaceVal;
+                EditorGUI.indentLevel--;
+            }
         }
 
         if (alphaClip != null)
