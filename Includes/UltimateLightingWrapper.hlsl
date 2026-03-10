@@ -2,6 +2,7 @@
 #define ULTIMATE_LIGHTING_WRAPPER_INCLUDED
 
 #ifndef SHADERGRAPH_PREVIEW
+
 #pragma multi_compile _ DYNAMICLIGHTMAP_ON
 
 //URP includes
