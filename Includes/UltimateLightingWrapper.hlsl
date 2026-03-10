@@ -286,7 +286,7 @@ void UltimateLitCustom_float(
 
     //global illumination + reflection
     float3 bakedGI = SampleSH(NormalWS);
-    //MixRealtimeAndBakedGI(mainLight, NormalWS, bakedGI);
+    MixRealtimeAndBakedGI(mainLight, NormalWS, bakedGI);
 
     BRDFData brdfData;
     InitializeBRDFData(Albedo, Metalness, float3(0.04, 0.04, 0.04), 1.0 - perceptualRoughness, Alpha, brdfData);
