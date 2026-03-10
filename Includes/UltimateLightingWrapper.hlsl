@@ -19,7 +19,6 @@
 
 //baked GI
 #pragma multi_compile _ DYNAMICLIGHTMAP_ON
-#endif
 
 //URP includes
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -185,13 +184,13 @@ void GetAdditionalLightData(float3 albedo, float perceptualRoughness, float alph
     uint count = GetAdditionalLightsCount();
     uint meshRenderingLayers = GetMeshRenderingLayer();
     
-    #if USE_FORWARD_PLUS
+    #if USE_CLUSTER_LIGHT_LOOP
     ClusterIterator clusterIterator = ClusterInit(normalizedScreenSpaceUV, positionWS, 0);
     uint lightIndex = 0;
     [loop] while (ClusterNext(clusterIterator, lightIndex)) 
     {
         lightIndex += URP_FP_DIRECTIONAL_LIGHTS_COUNT;
-        FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
+        CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
         Light light = GetAdditionalLight(lightIndex, positionWS, half4(1,1,1,1));
     
         #if defined(_LIGHT_LAYERS)
@@ -222,6 +221,8 @@ float3 GetReflection(float3 viewDirectionWS, float3 normalWS, float3 positionWS,
     float3 reflection = reflect(-viewDirectionWS, normalWS);
     return GlossyEnvironmentReflection(half3(reflection), positionWS, half(roughness), half(1.0), normalizedScreenSpaceUV);
 }
+
+#endif
 
 //shader graph custom function
 void UltimateLitCustom_float(

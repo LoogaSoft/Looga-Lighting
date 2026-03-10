@@ -2439,27 +2439,6 @@
 
 {
     "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.Vector2MaterialSlot",
-    "m_ObjectId": "10d3a9f9d8c1405a9d50da1cdf31bbec",
-    "m_Id": 8,
-    "m_DisplayName": "ScreenSpaceUV",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "ScreenSpaceUV",
-    "m_StageCapability": 3,
-    "m_Value": {
-        "x": 0.0,
-        "y": 0.0
-    },
-    "m_DefaultValue": {
-        "x": 0.0,
-        "y": 0.0
-    },
-    "m_Labels": []
-}
-
-{
-    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.CategoryData",
     "m_ObjectId": "1141b2f50b564973b854e21e80099760",
     "m_Name": "Advanced",
@@ -2636,7 +2615,7 @@
     "m_ObjectId": "19f08d55e39b4da4964970e35b3bce7c",
     "m_Title": "Subsurface Scattering",
     "m_Position": {
-        "x": -21.333656311035158,
+        "x": -21.333602905273439,
         "y": 423.33331298828127
     }
 }
@@ -2708,6 +2687,27 @@
     "m_DefaultValue": 0.0,
     "m_Labels": [],
     "m_LiteralMode": false
+}
+
+{
+    "m_SGVersion": 0,
+    "m_Type": "UnityEditor.ShaderGraph.Vector2MaterialSlot",
+    "m_ObjectId": "1bacd0db7b53401390d59ddd90544680",
+    "m_Id": 8,
+    "m_DisplayName": "ScreenSpaceUV",
+    "m_SlotType": 0,
+    "m_Hidden": false,
+    "m_ShaderOutputName": "ScreenSpaceUV",
+    "m_StageCapability": 3,
+    "m_Value": {
+        "x": 0.0,
+        "y": 0.0
+    },
+    "m_DefaultValue": {
+        "x": 0.0,
+        "y": 0.0
+    },
+    "m_Labels": []
 }
 
 {
@@ -3337,9 +3337,9 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": 98.66670989990235,
-            "y": 689.3333740234375,
-            "width": 143.99996948242188,
+            "x": 98.66665649414063,
+            "y": 686.666748046875,
+            "width": 144.0000457763672,
             "height": 36.0
         }
     },
@@ -3432,7 +3432,7 @@
     "m_Title": "Height",
     "m_Position": {
         "x": -2389.33349609375,
-        "y": -115.33334350585938
+        "y": -115.33336639404297
     }
 }
 
@@ -3522,8 +3522,8 @@
     "m_ObjectId": "307dcff1ace04eca87cef83b1aa166dd",
     "m_Title": "Detail",
     "m_Position": {
-        "x": -1048.0003662109375,
-        "y": 26.666622161865236
+        "x": -1048.000244140625,
+        "y": 26.66668701171875
     }
 }
 
@@ -5723,10 +5723,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": 358.6666259765625,
-            "y": 58.66666793823242,
-            "width": 266.66680908203127,
-            "height": 456.0000915527344
+            "x": 347.99993896484377,
+            "y": 58.66666030883789,
+            "width": 266.6666259765625,
+            "height": 479.9999694824219
         }
     },
     "m_Slots": [
@@ -5758,7 +5758,7 @@
             "m_Id": "be06cacd960042ff841452343cacd595"
         },
         {
-            "m_Id": "10d3a9f9d8c1405a9d50da1cdf31bbec"
+            "m_Id": "1bacd0db7b53401390d59ddd90544680"
         },
         {
             "m_Id": "de151800f58f4176af70dfb66517e3fe"
@@ -9669,8 +9669,8 @@
     "m_ObjectId": "becf361051ed4ce991f30496a02c2732",
     "m_Title": "World Vectors",
     "m_Position": {
-        "x": -338.66693115234377,
-        "y": 273.3332824707031
+        "x": -338.66680908203127,
+        "y": 273.33331298828127
     }
 }
 
@@ -10861,7 +10861,7 @@
     "m_Title": "Mask Map",
     "m_Position": {
         "x": -1722.6669921875,
-        "y": 177.9999542236328
+        "y": 178.00001525878907
     }
 }
 
@@ -11136,8 +11136,8 @@
     "m_ObjectId": "db73c5531114426295edc3c2d491a35a",
     "m_Title": "Emission",
     "m_Position": {
-        "x": -1693.3336181640625,
-        "y": -197.33335876464845
+        "x": -1693.333251953125,
+        "y": -197.33331298828126
     }
 }
 
@@ -11391,8 +11391,8 @@
     "m_ObjectId": "e04da938ecfb4aa8b1eafd4e8b5528c5",
     "m_Title": "Base Normal",
     "m_Position": {
-        "x": -1716.0003662109375,
-        "y": -525.3333740234375
+        "x": -1716.0001220703125,
+        "y": -525.3333129882813
     }
 }
 
@@ -11851,8 +11851,8 @@
     "m_ObjectId": "eb61ac87f0db49598fa0d623ee381890",
     "m_Title": "Base Albedo",
     "m_Position": {
-        "x": -1951.3333740234375,
-        "y": -859.3333129882813
+        "x": -1951.333251953125,
+        "y": -859.333251953125
     }
 }
 
