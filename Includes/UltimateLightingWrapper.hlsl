@@ -288,18 +288,12 @@ void UltimateLitCustom_float(
     float3 bakedGI = SampleSH(NormalWS);
     MixRealtimeAndBakedGI(mainLight, NormalWS, bakedGI);
 
-    //environment BRDF
-    float surfaceReduction = 1.0 / (alpha * alpha + 1.0);
-    float reflectivity = max(max(f0.r, f0.g), f0.b);
-    float grazingTerm = saturate((1.0 - perceptualRoughness) + reflectivity);
-    float3 envFresnel = f0 + (max(float3(grazingTerm, grazingTerm, grazingTerm), f0) - f0) * pow(1.0 - NoV, 5.0);
+    BRDFData brdfData;
+    InitializeBRDFData(Albedo, Metalness, float3(0.04, 0.04, 0.04), 1.0 - perceptualRoughness, Alpha, brdfData);
 
-    float3 indirectSpecular = GetReflection(ViewDirectionWS, NormalWS, PositionWS, perceptualRoughness, ScreenSpaceUV);
-    //prevent metals from accumulating diffuse GI
-    float3 indirectDiffuse = bakedGI * Albedo * (1.0 - Metalness);
+    float3 totalGI = GlobalIllumination(brdfData, bakedGI, occlusionData.indirect * AmbientOcclusion, PositionWS, NormalWS, ViewDirectionWS);
     
-    brdf.specular += indirectSpecular * envFresnel * surfaceReduction * occlusionData.indirect * AmbientOcclusion;
-    brdf.diffuse += indirectDiffuse * occlusionData.indirect * AmbientOcclusion;
+    brdf.diffuse += totalGI;
 
     // 5. Final Composition
     FinalColor = brdf.diffuse + brdf.specular + brdf.subsurface + Emission;
