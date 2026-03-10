@@ -36,7 +36,7 @@ public class UltimateLitShaderGUI : ShaderGUI
         MaterialProperty receiveShadows = FindProperty("_ReceiveShadows", properties, false);
         MaterialProperty backfaceNormalMode = FindProperty("_Backface_Normal_Mode", properties, false);
         
-        MaterialProperty albedoMap = FindProperty("_BaseColorMap", properties, false);
+        MaterialProperty albedoMap = FindProperty("_BaseMap", properties, false);
         MaterialProperty albedoColor = FindProperty("_BaseColor", properties, false);
 		MaterialProperty albedoContrast = FindProperty("_Albedo_Contrast", properties, false);
         MaterialProperty normalMap = FindProperty("_Normal_Map", properties, false);

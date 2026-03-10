@@ -6619,7 +6619,7 @@
     "m_DefaultRefNameVersion": 1,
     "m_RefNameGeneratedByDisplayName": "Albedo Map",
     "m_DefaultReferenceName": "_Albedo_Map",
-    "m_OverrideReferenceName": "_BaseColorMap",
+    "m_OverrideReferenceName": "_BaseMap",
     "m_GeneratePropertyBlock": true,
     "m_UseCustomSlotLabel": false,
     "m_CustomSlotLabel": "",
