@@ -2854,8 +2854,13 @@
     "m_ObjectId": "19f08d55e39b4da4964970e35b3bce7c",
     "m_Title": "Subsurface Scattering",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -21.333354949951173,
         "y": 423.3333740234375
+=======
+        "x": -21.333602905273439,
+        "y": 423.33331298828127
+>>>>>>> Stashed changes
     }
 }
 
@@ -3807,7 +3812,11 @@
     "m_Title": "Height",
     "m_Position": {
         "x": -2389.33349609375,
+<<<<<<< Updated upstream
         "y": -115.33334350585938
+=======
+        "y": -115.33336639404297
+>>>>>>> Stashed changes
     }
 }
 
@@ -3897,8 +3906,13 @@
     "m_ObjectId": "307dcff1ace04eca87cef83b1aa166dd",
     "m_Title": "Detail",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -1048.0,
         "y": 26.66667938232422
+=======
+        "x": -1048.000244140625,
+        "y": 26.66668701171875
+>>>>>>> Stashed changes
     }
 }
 
@@ -10383,8 +10397,13 @@
     "m_ObjectId": "becf361051ed4ce991f30496a02c2732",
     "m_Title": "World Vectors",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -338.66668701171877,
         "y": 273.3333740234375
+=======
+        "x": -338.66680908203127,
+        "y": 273.33331298828127
+>>>>>>> Stashed changes
     }
 }
 
@@ -11672,8 +11691,13 @@
     "m_ObjectId": "d2f12e703e574b43a806f12125748d47",
     "m_Title": "Mask Map",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -1722.666748046875,
         "y": 177.99998474121095
+=======
+        "x": -1722.6669921875,
+        "y": 178.00001525878907
+>>>>>>> Stashed changes
     }
 }
 
@@ -11973,8 +11997,13 @@
     "m_ObjectId": "db73c5531114426295edc3c2d491a35a",
     "m_Title": "Emission",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -1693.3336181640625,
         "y": -197.3332977294922
+=======
+        "x": -1693.3333740234375,
+        "y": -197.33331298828126
+>>>>>>> Stashed changes
     }
 }
 
@@ -12203,8 +12232,13 @@
     "m_ObjectId": "e04da938ecfb4aa8b1eafd4e8b5528c5",
     "m_Title": "Base Normal",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -1716.000244140625,
         "y": -525.3333129882813
+=======
+        "x": -1716.0003662109375,
+        "y": -525.3333740234375
+>>>>>>> Stashed changes
     }
 }
 
@@ -12701,8 +12735,13 @@
     "m_ObjectId": "eb61ac87f0db49598fa0d623ee381890",
     "m_Title": "Base Albedo",
     "m_Position": {
+<<<<<<< Updated upstream
         "x": -1860.0003662109375,
         "y": -875.3335571289063
+=======
+        "x": -1951.33349609375,
+        "y": -859.3333129882813
+>>>>>>> Stashed changes
     }
 }
 
