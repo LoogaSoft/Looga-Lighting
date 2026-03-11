@@ -281,61 +281,12 @@ public class UltimateLitShaderGUI : ShaderGUI
                 }
                 EditorGUI.indentLevel--;
             }
-
-            if (surfaceOptionsChanged)
-            {
-                foreach (var obj in materialEditor.targets)
-                {
-                    Material mat = obj as Material;
-                    if (mat == null) continue;
-                    
-                    //if opaque
-                    if (surfaceType.floatValue == 0)
-                    {
-                        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
-                        mat.SetOverrideTag("RenderType", "Opaque");
-                        mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.One);
-                        mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.Zero);
-                        mat.SetInt(ZWrite, 1);
-                        mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT_ON");
-                    }
-                    //if transparent
-                    else
-                    {
-                        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                        mat.SetOverrideTag("RenderType", "Transparent");
-                        mat.SetInt(ZWrite, 0);
-                        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT_ON");
-                        
-                        int blendVal = blendMode != null ? (int)blendMode.floatValue : 0;
-                        switch (blendVal)
-                        {
-                            case 0: //alpha
-                                mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                                mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                                break;
-                            case 1: //premultiply
-                                mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.One);
-                                mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                                break;
-                            case 2: //additive
-                                mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                                mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.One);
-                                break;
-                            case 3: //multiply
-                                mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.DstColor);
-                                mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.Zero);
-                                break;
-                        }
-                    }
-                }
-            }
         }
 
         if (renderFaceType != null)
         {
             EditorGUI.BeginChangeCheck();
-            string[] renderFaceTypes = { "Both", "Front", "Back" };
+            string[] renderFaceTypes = { "Both", "Back", "Front" };
             int val = (int)renderFaceType.floatValue;
             val = EditorGUILayout.Popup("Render Face", val, renderFaceTypes);
             if (EditorGUI.EndChangeCheck())
@@ -361,7 +312,11 @@ public class UltimateLitShaderGUI : ShaderGUI
             bool isClipping = alphaClip.floatValue > 0.5f;
             isClipping = EditorGUILayout.Toggle("Alpha Clipping", isClipping);
             if (EditorGUI.EndChangeCheck())
+            {
                 alphaClip.floatValue = isClipping ? 1f : 0f;
+                surfaceOptionsChanged = true;
+            }
+
             if (isClipping && clipThreshold != null)
             {
                 EditorGUI.indentLevel++;
@@ -376,7 +331,63 @@ public class UltimateLitShaderGUI : ShaderGUI
             bool isShadows = receiveShadows.floatValue > 0.5f;
             isShadows = EditorGUILayout.Toggle("Receive Shadows", isShadows);
             if (EditorGUI.EndChangeCheck())
+            {
                 receiveShadows.floatValue = isShadows ? 1f : 0f;
+                surfaceOptionsChanged = true;
+            }
+        }
+
+        if (surfaceOptionsChanged)
+        {
+            foreach (var obj in materialEditor.targets)
+            {
+                Material mat = obj as Material;
+                if (mat == null) continue;
+                
+                bool isClipping = alphaClip != null && alphaClip.floatValue > 0.5f;
+                if (isClipping)
+                    mat.EnableKeyword("_ALPHATEST_ON");
+                else
+                    mat.DisableKeyword("_ALPHATEST_ON");
+
+                if (surfaceType.floatValue == 0)
+                {
+                    mat.renderQueue = isClipping ? (int)UnityEngine.Rendering.RenderQueue.AlphaTest : (int)UnityEngine.Rendering.RenderQueue.Geometry;
+                    mat.SetOverrideTag("RenderType", isClipping ? "TransparentCutout" : "Opaque");
+                    mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.One);
+                    mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.Zero);
+                    mat.SetInt(ZWrite, 1);
+                    mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT_ON");
+                }
+                else
+                {
+                    mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    mat.SetOverrideTag("RenderType", "Transparent");
+                    mat.SetInt(ZWrite, 0);
+                    mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT_ON");
+                    
+                    int blendVal = blendMode != null ? (int)blendMode.floatValue : 0;
+                    switch (blendVal)
+                    {
+                        case 0: //alpha
+                            mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                            mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                            break;
+                        case 1: //premultiply
+                            mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.One);
+                            mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                            break;
+                        case 2: //additive
+                            mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                            mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.One);
+                            break;
+                        case 3: //multiply
+                            mat.SetInt(SrcBlend, (int)UnityEngine.Rendering.BlendMode.DstColor);
+                            mat.SetInt(DstBlend, (int)UnityEngine.Rendering.BlendMode.Zero);
+                            break;
+                    }
+                }
+            }
         }
     }
 

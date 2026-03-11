@@ -229,6 +229,7 @@ void UltimateLitCustom_float(
     float SubsurfaceAmbient,
     float SubsurfaceDistortion,
     float LambertDiffuseWrap,
+    float3 AmbientGI,
     //outputs
     out float3 FinalColor,
     out float FinalAlpha
@@ -239,6 +240,9 @@ void UltimateLitCustom_float(
     FinalAlpha = Alpha;
 #else
 
+    NormalWS = SafeNormalize(NormalWS);
+    ViewDirectionWS = SafeNormalize(ViewDirectionWS);
+    
     SubsurfaceData ssData;
     ssData.color = SubsurfaceColor;
     ssData.thickness = SubsurfaceThickness;
@@ -284,15 +288,12 @@ void UltimateLitCustom_float(
     OcclusionData occlusionData = GetAmbientOcclusionData(ScreenSpaceUV);
     ApplyDirectOcclusion(occlusionData, brdf);
 
-    //global illumination + reflection
-    float3 bakedGI = SampleSH(NormalWS);
-    MixRealtimeAndBakedGI(mainLight, NormalWS, bakedGI);
-
     BRDFData brdfData;
     InitializeBRDFData(Albedo, Metalness, float3(0.04, 0.04, 0.04), 1.0 - perceptualRoughness, Alpha, brdfData);
 
-    float3 totalGI = GlobalIllumination(brdfData, bakedGI, occlusionData.indirect * AmbientOcclusion, PositionWS, NormalWS, ViewDirectionWS);
-    
+    float finalAO = occlusionData.indirect * AmbientOcclusion;
+    float3 totalGI = GlobalIllumination(brdfData, AmbientGI, finalAO, PositionWS, NormalWS, ViewDirectionWS);
+
     brdf.diffuse += totalGI;
 
     // 5. Final Composition
