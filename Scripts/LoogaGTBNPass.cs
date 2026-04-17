@@ -10,7 +10,7 @@ namespace LoogaSoft.Lighting
         private ComputeShader _gtbnCompute;
         private ComputeShader _blurCompute;
         private Material _applyMaterial;
-        private LoogaLightingFeature.GTBNSettings _settings;
+        private LoogaGTBNFeature _feature;
         
         private int _gtbnKernel, _blurHKernel, _blurVKernel;
         private static readonly int GTBNTextureID = Shader.PropertyToID("_GTBNTexture");
@@ -20,12 +20,12 @@ namespace LoogaSoft.Lighting
             renderPassEvent = RenderPassEvent.BeforeRenderingDeferredLights - 1;
         }
 
-        public void Setup(ComputeShader gtbnCompute, ComputeShader blurCompute, Material applyMaterial, LoogaLightingFeature.GTBNSettings settings)
+        public void Setup(ComputeShader gtbnCompute, ComputeShader blurCompute, Material applyMaterial, LoogaGTBNFeature feature)
         {
             _gtbnCompute = gtbnCompute;
             _blurCompute = blurCompute;
             _applyMaterial = applyMaterial;
-            _settings = settings;
+            _feature = feature;
             
             if (_gtbnCompute != null)
                 _gtbnKernel = _gtbnCompute.FindKernel("CSMain");
@@ -101,7 +101,6 @@ namespace LoogaSoft.Lighting
                     return ray / -ray.z;
                 }
                 
-                //calculate as local vector3s so math is explicit
                 Vector3 bottomLeft = GetViewRay(-1f, -1f);
                 Vector3 bottomRight = GetViewRay(1f, -1f);
                 Vector3 topLeft = GetViewRay(-1f, 1f);
@@ -119,11 +118,11 @@ namespace LoogaSoft.Lighting
                     int threadGroupsX = Mathf.CeilToInt(cameraData.cameraTargetDescriptor.width / 8.0f);
                     int threadGroupsY = Mathf.CeilToInt(cameraData.cameraTargetDescriptor.height / 8.0f);
                     
-                    //generate GTBN
                     cmd.SetComputeMatrixParam(_gtbnCompute, "_ViewMatrix", data.viewMatrix);
                     cmd.SetComputeMatrixParam(_gtbnCompute, "_InvViewMatrix", data.invViewMatrix);
-                    cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams1", new Vector4(_settings.radius, _settings.maxRadiusPixels, _settings.sliceCount, _settings.stepCount));
-                    cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams2", new Vector4(_settings.intensity, _settings.thickness, data.projScale, 0));
+                    
+                    cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams1", new Vector4(_feature.radius, _feature.maxRadiusPixels, _feature.sliceCount, _feature.stepCount));
+                    cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams2", new Vector4(_feature.intensity, _feature.thickness, data.projScale, 0));
                     
                     if (data.depthTexture.IsValid()) cmd.SetGlobalTexture("_CameraDepthTexture", data.depthTexture);
                     if (data.normalsTexture.IsValid()) cmd.SetGlobalTexture("_GBuffer2", data.normalsTexture);
@@ -134,14 +133,12 @@ namespace LoogaSoft.Lighting
                     cmd.SetComputeTextureParam(_gtbnCompute, _gtbnKernel, "_RW_GTBNTarget", data.gtbnTarget);
                     cmd.DispatchCompute(_gtbnCompute, _gtbnKernel, threadGroupsX, threadGroupsY, 1);
 
-                    //horizontal blur (GTBN to ping pong)
-                    cmd.SetComputeFloatParam(_blurCompute, "_BlurRadius", _settings.blurRadius);
+                    cmd.SetComputeFloatParam(_blurCompute, "_BlurRadius", _feature.blurRadius);
                     cmd.SetComputeVectorParam(_blurCompute, "_BlurDirection", new Vector2(1, 0));
                     cmd.SetComputeTextureParam(_blurCompute, _blurHKernel, "_SourceTex", data.gtbnTarget);
                     cmd.SetComputeTextureParam(_blurCompute, _blurHKernel, "_RW_BlurTarget", data.blurPingPong);
                     cmd.DispatchCompute(_blurCompute, _blurHKernel, threadGroupsX, threadGroupsY, 1);
 
-                    //vertical blur (ping pong to GTBN)
                     cmd.SetComputeVectorParam(_blurCompute, "_BlurDirection", new Vector2(0, 1));
                     cmd.SetComputeTextureParam(_blurCompute, _blurVKernel, "_SourceTex", data.blurPingPong);
                     cmd.SetComputeTextureParam(_blurCompute, _blurVKernel, "_RW_BlurTarget", data.gtbnTarget);

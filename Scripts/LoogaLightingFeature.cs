@@ -1,5 +1,3 @@
-using System;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
@@ -13,113 +11,71 @@ namespace LoogaSoft.Lighting
         public enum LightingModel
         {
             DisneyBurley,
-            Source2
-        }
-
-        [Serializable]
-        public class GTBNSettings
-        {
-            [Range(0.1f, 1.0f)] public float radius = 0.3f;
-            [Range(10f, 150f)] public float maxRadiusPixels = 100f;
-            [Range(0.01f, 0.5f)] public float thickness = 0.2f;
-            [Range(0.0f, 3.0f)] public float intensity = 1f;
-            [Range(1, 8)] public int sliceCount = 3;
-            [Range(2, 16)] public int stepCount = 8;
-            [Range(0.0f, 1.0f)] public float directLightStrength = 0.5f;
-            [Range(0, 4)] public int blurRadius = 2;
+            Source2,
+            TF2,
+            Minnaert,
+            Overwatch,
+            OrenNayar,
+            Arkane
         }
         
         public LightingModel activeLightingModel = LightingModel.DisneyBurley;
 
-        public bool useGTBN = false;
-        public GTBNSettings gtbnSettings = new();
-        public ComputeShader gtbnCompute;
-        public ComputeShader gtbnBlurCompute;
-        public Shader gtbnApplyShader;
-
-        [SerializeField] private Shader _customLightingShader;
         private Material _customLightingMaterial;
-        private Material _gtbnApplyMaterial;
         private CustomLightingPass _customLightingPass;
-        private LoogaGTBNPass _gtbnPass;
-        
-        #if UNITY_EDITOR
-        private void OnValidate()
-        {
-            bool needsSave = false;
-
-            if (_customLightingShader == null)
-            {
-                _customLightingShader = Shader.Find("Hidden/LoogaSoft/LoogaLighting");
-                if (_customLightingShader != null)
-                    needsSave = true;
-            }
-
-            if (gtbnCompute == null)
-                AssignCompute(ref gtbnCompute, "LoogaGTBN", ref needsSave);
-            if (gtbnBlurCompute == null)
-                AssignCompute(ref gtbnBlurCompute, "LoogaGTBNBlur", ref needsSave);
-
-            if (gtbnApplyShader == null)
-            {
-                gtbnApplyShader = Shader.Find("Hidden/LoogaSoft/ApplyGTBN");
-                needsSave = true;
-            }
-            
-            if (needsSave)
-                EditorUtility.SetDirty(this);
-        }
-
-        private void AssignCompute(ref ComputeShader compute, string computeName, ref bool needsSave)
-        {
-            string[] guids = AssetDatabase.FindAssets($"{computeName} t:ComputeShader");
-            if (guids.Length > 0)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[0]);
-                compute = AssetDatabase.LoadAssetAtPath<ComputeShader>(path);
-                needsSave = true;
-            }
-        }
-        #endif
         
         public override void Create()
         {
-            if (_customLightingShader == null)
-                _customLightingShader = Shader.Find("Hidden/LoogaSoft/LoogaLighting");
-            if (gtbnApplyShader == null)
-                gtbnApplyShader = Shader.Find("Hidden/LoogaSoft/ApplyGTBN");
-            
-            if (_customLightingShader != null && _customLightingMaterial == null)
-                _customLightingMaterial = CoreUtils.CreateEngineMaterial(_customLightingShader);
-            if (_customLightingMaterial != null && _customLightingPass == null)
-                _customLightingPass = new CustomLightingPass(_customLightingMaterial);
-            if (gtbnApplyShader != null && _gtbnApplyMaterial == null)
-                _gtbnApplyMaterial = CoreUtils.CreateEngineMaterial(gtbnApplyShader);
-            if (_gtbnPass == null)
-                _gtbnPass = new LoogaGTBNPass();
+            UpdateLightingMaterial();
         }
-        public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
-        {
-            if (_customLightingMaterial == null) return;
-            
-            bool isSource2Lighting = activeLightingModel == LightingModel.Source2;
-            if (isSource2Lighting)
-                _customLightingMaterial.EnableKeyword("_SOURCE2_LIGHTING");
-            else
-                _customLightingMaterial.DisableKeyword("_SOURCE2_LIGHTING");
 
-            if (renderingData.cameraData.cameraType == CameraType.Game || renderingData.cameraData.cameraType == CameraType.SceneView)
+        private void UpdateLightingMaterial()
+        {
+            string shaderName = activeLightingModel switch
             {
-                if (useGTBN && gtbnCompute != null && gtbnBlurCompute != null)
+                LightingModel.DisneyBurley => "Hidden/LoogaSoft/Lighting/DisneyBurley",
+                LightingModel.Source2 => "Hidden/LoogaSoft/Lighting/Source2",
+                LightingModel.TF2 => "Hidden/LoogaSoft/Lighting/TF2",
+                LightingModel.Minnaert => "Hidden/LoogaSoft/Lighting/Minnaert",
+                LightingModel.Overwatch => "Hidden/LoogaSoft/Lighting/Overwatch",
+                LightingModel.OrenNayar => "Hidden/LoogaSoft/Lighting/OrenNayar",
+                LightingModel.Arkane => "Hidden/LoogaSoft/Lighting/Arkane",
+                _ => "Hidden/LoogaSoft/Lighting/DisneyBurley"
+            };
+
+            if (_customLightingMaterial == null || _customLightingMaterial.shader.name != shaderName)
+            {
+                if (_customLightingMaterial != null)
+                    CoreUtils.Destroy(_customLightingMaterial);
+
+                Shader shader = Shader.Find(shaderName);
+                if (shader != null)
                 {
-                    _customLightingMaterial.EnableKeyword("_USE_GTBN");
-                    _customLightingMaterial.SetFloat("_GTBNDirectLightStrength", gtbnSettings.directLightStrength);
-                    _gtbnPass.Setup(gtbnCompute, gtbnBlurCompute, _gtbnApplyMaterial, gtbnSettings);
-                    renderer.EnqueuePass(_gtbnPass);
+                    _customLightingMaterial = CoreUtils.CreateEngineMaterial(shader);
                 }
                 else
-                    _customLightingMaterial.DisableKeyword("_USE_GTBN");
+                {
+                    Debug.LogError($"[LoogaLighting] Could not find shader: {shaderName}");
+                }
+            }
 
+            if (_customLightingMaterial != null)
+            {
+                if (_customLightingPass == null)
+                    _customLightingPass = new CustomLightingPass(_customLightingMaterial);
+                else
+                    _customLightingPass.UpdateMaterial(_customLightingMaterial);
+            }
+        }
+
+        public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
+        {
+            UpdateLightingMaterial();
+
+            if (_customLightingMaterial == null) return;
+            
+            if (renderingData.cameraData.cameraType == CameraType.Game || renderingData.cameraData.cameraType == CameraType.SceneView)
+            {
                 renderer.EnqueuePass(_customLightingPass);
             }
         }
@@ -131,22 +87,14 @@ namespace LoogaSoft.Lighting
                 CoreUtils.Destroy(_customLightingMaterial);
                 _customLightingMaterial = null;
             }
-
-            if (_gtbnApplyMaterial != null)
-            {
-                CoreUtils.Destroy(_gtbnApplyMaterial);
-                _gtbnApplyMaterial = null;
-            }
             
             _customLightingPass = null;
-            _gtbnPass = null;
-
             base.Dispose(disposing);
         }
 
         private class CustomLightingPass : ScriptableRenderPass
         {
-            private readonly Material _lightingMaterial;
+            private Material _lightingMaterial;
 
             private static readonly int[] ShaderGBufferIDs = {
                 Shader.PropertyToID("_GBuffer0"),
@@ -161,6 +109,11 @@ namespace LoogaSoft.Lighting
             {
                 _lightingMaterial = material;
                 renderPassEvent = RenderPassEvent.BeforeRenderingDeferredLights;
+            }
+
+            public void UpdateMaterial(Material newMaterial)
+            {
+                _lightingMaterial = newMaterial;
             }
             
             private class LightingPassData
@@ -254,7 +207,6 @@ namespace LoogaSoft.Lighting
                     builder.SetRenderFunc((BlitPassData data, RasterGraphContext context) =>
                     {
                         RasterCommandBuffer cmd = context.cmd;
-                        
                         Blitter.BlitTexture(cmd, data.source, new Vector4(1,1,0,0), 0.0f, false);
                         cmd.ClearRenderTarget(RTClearFlags.Stencil, Color.clear, 1.0f, 0);
                     });
