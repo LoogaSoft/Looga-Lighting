@@ -43,4 +43,23 @@ float GSF(float NoL, float NoV, float roughness)
     return max(l * v, 1e-7);
 }
 
+float3 EvaluateSecondaryGGXLobe(float3 f0, float secondaryRoughness, float3 normalWS, float3 lightDir, float3 viewDir, float NoV, float3 radiance, float lobeMix)
+{
+    float NoL = saturate(dot(normalWS, lightDir));
+    if (NoL <= 0.0) return 0.0;
+
+    float3 H = SafeNormalize(lightDir + viewDir);
+    float NoH = saturate(dot(normalWS, H));
+    float VoH = saturate(dot(viewDir, H));
+
+    float roughness2 = secondaryRoughness * secondaryRoughness;
+    float3 ndf = NDF(roughness2, NoH);
+    float3 fresnel = Fresnel(f0, VoH, roughness2);
+    float gsf = GSF(NoL, NoV, roughness2);
+
+    // Calculate specular and multiply by incoming light radiance and the mix weight
+    float3 specular = (fresnel * ndf * gsf) / max((4.0 * NoL * NoV), 1e-7);
+    return specular * radiance * NoL * PI * lobeMix;
+}
+
 #endif

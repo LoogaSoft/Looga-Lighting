@@ -22,8 +22,13 @@ half4 LoogaDeferredLightingFrag(Varyings input) : SV_Target
     uint materialFlags = uint(gbuffer0.a * 255.0);
     bool isSpecularWorkflow = (materialFlags & 8) != 0;
     
+    bool isDualLobe = (materialFlags & 16) != 0;
+    half secondaryRoughness = gbuffer1.g;
+    half lobeMix = gbuffer1.b;
+    
     half3 diffuseColor;
     half3 f0;
+    
     if (isSpecularWorkflow)
     {
         f0 = gbuffer1.rgb;
@@ -65,6 +70,11 @@ half4 LoogaDeferredLightingFrag(Varyings input) : SV_Target
     float3 mainRadiance = mainLight.color * mainLight.shadowAttenuation * mainLight.distanceAttenuation;
 
     finalColor += EvaluateLighting(diffuseColor, f0, perceptualRoughness, normalWS, occlusion, viewDirectionWS, NoV, mainLight.direction, mainRadiance);
+    
+    if (isDualLobe)
+    {
+        finalColor += EvaluateSecondaryGGXLobe(f0, secondaryRoughness, normalWS, mainLight.direction, viewDirectionWS, NoV, mainRadiance, lobeMix);
+    }
 
     #if USE_CLUSTER_LIGHT_LOOP
         ClusterIterator clusterIterator = ClusterInit(uv, positionWS, 0);
@@ -84,6 +94,11 @@ half4 LoogaDeferredLightingFrag(Varyings input) : SV_Target
             Light light = GetAdditionalLight(lightIndex, positionWS, half4(1,1,1,1));
             float3 dynRadiance = light.color * light.shadowAttenuation * light.distanceAttenuation;
             finalColor += EvaluateLighting(diffuseColor, f0, perceptualRoughness, normalWS, occlusion, viewDirectionWS, NoV, light.direction, dynRadiance);
+            
+            if (isDualLobe) 
+            {
+                finalColor += EvaluateSecondaryGGXLobe(f0, secondaryRoughness, normalWS, light.direction, viewDirectionWS, NoV, dynRadiance, lobeMix);
+            }
         }
     #endif
     
