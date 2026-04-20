@@ -67,7 +67,7 @@ Shader "Hidden/LoogaSoft/SSSS"
 
             blurredColor /= max(totalWeight, 0.0001);
 
-            half3 finalColor = lerp(centerColor.rgb, blurredColor * localSubsurfaceColor, 0.8);
+            half3 finalColor = lerp(centerColor.rgb, blurredColor, localSubsurfaceColor);
 
             return half4(finalColor, centerColor.a);
         }
