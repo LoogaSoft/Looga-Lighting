@@ -1,0 +1,170 @@
+#pragma kernel CSMain
+
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Packing.hlsl"
+
+Texture2D<half4> _GBuffer2; //normals
+RWTexture2D<float4> _RW_GTBNTarget;
+
+float4 _GTBNParams1; //x-radius, y-max radius pixels, z-slice count, w-step count
+float4 _GTBNParams2; //x-intensity, y-thickness
+float4 _CameraViewBottomLeftCorner;
+float4 _CameraViewXExtent;
+float4 _CameraViewYExtent;
+int _LoogaGBufferNormalsAreOct;
+
+half3 DecodeGBufferNormal(half3 packedNormalWS)
+{
+    if (_LoogaGBufferNormalsAreOct != 0)
+    {
+        float2 octNormalWS = Unpack888ToFloat2(packedNormalWS) * 2.0 - 1.0;
+        return half3(UnpackNormalOctQuadEncode(octNormalWS));
+    }
+
+    return normalize(packedNormalWS);
+}
+
+float3 ReconstructViewPos(float2 uv, float depth)
+{
+    float3 viewRay = _CameraViewBottomLeftCorner.xyz + _CameraViewXExtent.xyz * uv.x + _CameraViewYExtent.xyz * uv.y;
+    return viewRay * LinearEyeDepth(depth, _ZBufferParams);
+}
+
+[numthreads(8, 8, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint width, height;
+    _RW_GTBNTarget.GetDimensions(width, height);
+    if (id.x >= width || id.y >= height) return;
+
+    float2 texelSize = 1.0 / float2(width, height);
+    float2 uv = (float2(id.xy) + 0.5) * texelSize;
+
+    //sample depth/normal
+    float rawDepth = _CameraDepthTexture.SampleLevel(sampler_PointClamp, uv, 0).r;
+    #if !UNITY_REVERSED_Z
+        rawDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1, rawDepth);
+    #endif
+
+    //skybox early out
+    if (rawDepth == UNITY_RAW_FAR_CLIP_VALUE)
+    {
+        _RW_GTBNTarget[id.xy] = float4(0, 0, 0, 1);
+        return;
+    }
+    
+    half3 normalWS = DecodeGBufferNormal(_GBuffer2.SampleLevel(sampler_PointClamp, uv, 0).rgb);
+    float3 vpos = ReconstructViewPos(uv, rawDepth);
+    float3 vnormal = mul((float3x3)_ViewMatrix, normalWS);
+    float3 viewDir = normalize(-vpos);
+    
+    float radius = _GTBNParams1.x;
+    float maxRadiusPixels = _GTBNParams1.y;
+    int sliceCount = (int)_GTBNParams1.z;
+    int stepCount = (int)_GTBNParams1.w;
+    float intensity = _GTBNParams2.x;
+    float thickness = _GTBNParams2.y;
+    float projScale = _GTBNParams2.z;
+    
+    float radiusPixels = radius * projScale / abs(vpos.z);
+    radiusPixels = min(radiusPixels, maxRadiusPixels);
+    float stepSize = max(radiusPixels / (float)stepCount, 1.0);
+
+    float noise = InterleavedGradientNoise(id.xy, 0);
+    float sliceAngle = (PI / (float)sliceCount);
+    
+    float ao = 0.0;
+    float3 bentNormalVS = float3(0, 0, 0);
+    
+    for (int i = 0; i < sliceCount; i++)
+    {
+        float phi = (i + noise) * sliceAngle;
+        float2 omega = float2(cos(phi), sin(phi));
+        float3 direction = float3(omega, 0.0);
+        
+        float3 orthoDirection = direction - dot(direction, viewDir) * viewDir;
+        float3 axis = cross(direction, viewDir);
+        float3 projNormal = vnormal - axis * dot(vnormal, axis);
+        float projNormalLen = length(projNormal);
+        float cosN = saturate(dot(projNormal / projNormalLen, viewDir));
+        float n = sign(dot(orthoDirection, projNormal)) * acos(cosN);
+        
+        // Initialize to -1 (lowest possible cosine / totally unoccluded)
+        float maxCosH1 = -1.0;
+        float maxCosH2 = -1.0;
+        
+        // Unrolling the Sides prevents branching and is much faster on the GPU
+        for (int s = 1; s <= stepCount; s++)
+        {
+            //positive direction
+            float2 offsetUV1 = uv + omega * texelSize * (s * stepSize);
+            float depth1 = _CameraDepthTexture.SampleLevel(sampler_PointClamp, saturate(offsetUV1), 0).r;
+            #if !UNITY_REVERSED_Z
+                depth1 = lerp(UNITY_NEAR_CLIP_VALUE, 1, depth1);
+            #endif
+            float3 pos1 = ReconstructViewPos(saturate(offsetUV1), depth1);
+            float3 delta1 = pos1 - vpos;
+            float deltaSq1 = dot(delta1, delta1);
+
+            if (deltaSq1 < radius * radius)
+            {
+                //distance falloff
+                float falloff = saturate(1.0 - (deltaSq1 / (radius * radius)));
+                
+                //smooth thickness falloff
+                float depthDiff1 = pos1.z - vpos.z;
+                falloff *= 1.0 - smoothstep(thickness * 0.5, thickness, depthDiff1);
+                
+                float cosH = dot(delta1, viewDir) * rsqrt(deltaSq1);
+                maxCosH1 = max(maxCosH1, lerp(-1.0, cosH, falloff)); 
+            }
+
+            //negative direction
+            float2 offsetUV2 = uv - omega * texelSize * (s * stepSize);
+            float depth2 = _CameraDepthTexture.SampleLevel(sampler_PointClamp, saturate(offsetUV2), 0).r;
+            #if !UNITY_REVERSED_Z
+                depth2 = lerp(UNITY_NEAR_CLIP_VALUE, 1, depth2);
+            #endif
+            float3 pos2 = ReconstructViewPos(saturate(offsetUV2), depth2);
+            float3 delta2 = pos2 - vpos;
+            float deltaSq2 = dot(delta2, delta2);
+
+            if (deltaSq2 < radius * radius)
+            {
+                //distance falloff
+                float falloff = saturate(1.0 - (deltaSq2 / (radius * radius)));
+                
+                //smooth thicness falloff
+                float depthDiff2 = pos2.z - vpos.z;
+                falloff *= 1.0 - smoothstep(thickness * 0.5, thickness, depthDiff2);
+                
+                float cosH = dot(delta2, viewDir) * rsqrt(deltaSq2);
+                maxCosH2 = max(maxCosH2, lerp(-1.0, cosH, falloff));
+            }
+        }
+        
+        float h1 = acos(maxCosH1);
+        float h2 = acos(maxCosH2);
+
+        h1 = n + max(h1 - n, -PI * 0.5);
+        h2 = n - max(h2 + n, -PI * 0.5);
+        
+        // Ground truth analytical integration
+        float sliceVisibility = projNormalLen * 0.25 * (cosN + 2.0 * h1 * sin(n) - cos(2.0 * h1 - n) + cosN + 2.0 * h2 * sin(n) - cos(2.0 * h2 - n));
+        ao += sliceVisibility;
+        
+        // GTBN vector calculation
+        float t = (h1 + h2) * 0.5;
+        float3 sliceBentNormal = (cos(t) * orthoDirection) + (sin(t) * viewDir);
+        bentNormalVS += sliceBentNormal;
+    }
+    
+    float visibility = ao / (float)sliceCount;
+    float finalOcclusion = saturate(pow(max(0.0, visibility), intensity));
+
+    bentNormalVS = normalize(bentNormalVS);
+    float3 bentNormalWS = mul((float3x3)_InvViewMatrix, bentNormalVS);
+    
+    _RW_GTBNTarget[id.xy] = float4(bentNormalWS * 0.5 + 0.5, finalOcclusion);   
+}
