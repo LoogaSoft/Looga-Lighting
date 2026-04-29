@@ -12,7 +12,8 @@ namespace LoogaSoft.LightingPrime.Editor
 
             MaterialProperty baseMap = FindProperty("_BaseMap", properties);
             MaterialProperty cutoff = FindProperty("_Cutoff", properties);
-            MaterialProperty normalMap = FindProperty("_NormalMap", properties);
+            MaterialProperty normalMap = FindProperty("_BumpMap", properties);
+            MaterialProperty normalScale = FindProperty("_BumpScale", properties);
             MaterialProperty smoothness = FindProperty("_Smoothness", properties);
             
             // NEW SSSS Properties
@@ -42,12 +43,14 @@ namespace LoogaSoft.LightingPrime.Editor
             MaterialProperty specHighlights = FindProperty("_SpecularHighlights", properties, false);
             MaterialProperty envReflections = FindProperty("_EnvironmentReflections", properties, false);
 
-            Section("Surface Options", "LoogaGrass_SurfaceOptions", true, () =>
+            DrawSurfaceOptionsSection(materialEditor, properties, "LoogaGrass_SurfaceOptions");
+
+            Section("Surface Inputs", "LoogaGrass_SurfaceInputs", true, () =>
             {
                 materialEditor.TexturePropertySingleLine(new GUIContent("Base Map (RGB) Alpha (A)"), baseMap);
                 materialEditor.ShaderProperty(cutoff, "Alpha Cutoff");
                 EditorGUILayout.Space(2);
-                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap);
+                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalScale);
                 EditorGUILayout.Space(2);
                 materialEditor.ShaderProperty(smoothness, "Smoothness");
                 EditorGUILayout.Space();

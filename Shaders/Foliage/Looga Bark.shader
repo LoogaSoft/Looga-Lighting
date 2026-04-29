@@ -4,9 +4,16 @@ Shader "LoogaSoft/Bark"
     {
         [MainTexture] _BaseMap ("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
+        [Enum(Specular, 0, Metallic, 1)] _WorkflowMode ("Workflow Mode", Float) = 1.0
+        [Enum(Opaque, 0, Transparent, 1)] _Surface ("Surface Type", Float) = 0.0
+        _Cull ("Render Face", Float) = 2.0
+        [Enum(Mirror, 0, Flip, 1)] _BackfaceNormalMode ("Backface Normals", Float) = 0.0
+        [ToggleUI] _AlphaClip ("Alpha Clipping", Float) = 0.0
+        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+        [ToggleUI] _ReceiveShadows ("Receive Shadows", Float) = 1.0
         
-        _NormalMap ("Normal Map", 2D) = "bump" {}
-        _NormalScale ("Normal Scale", Float) = 1.0
+        _BumpMap ("Normal Map", 2D) = "bump" {}
+        _BumpScale ("Normal Scale", Float) = 1.0
         
         [Toggle(_USE_MASK_MAP)] _UseMaskMap ("Use Mask Map", Float) = 0.0
         _MaskMap ("Mask Map (R:Metallic, G:Occlusion, A:Smoothness)", 2D) = "white" {}
@@ -42,6 +49,7 @@ Shader "LoogaSoft/Bark"
         {
             Name "GBuffer"
             Tags { "LightMode" = "UniversalGBuffer" }
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -56,7 +64,7 @@ Shader "LoogaSoft/Bark"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "LoogaWind.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
 
             struct Attributes 
             { 
@@ -75,7 +83,7 @@ Shader "LoogaSoft/Bark"
             };
 
             TEXTURE2D(_BaseMap);    SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_NormalMap);  SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_BumpMap);  SAMPLER(sampler_BumpMap);
             TEXTURE2D(_MetallicMap);
             TEXTURE2D(_OcclusionMap);
             TEXTURE2D(_MaskMap);    SAMPLER(sampler_MaskMap);
@@ -83,7 +91,10 @@ Shader "LoogaSoft/Bark"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
-                float _NormalScale;
+                float _AlphaClip;
+                float _Cutoff;
+                float _BumpScale;
+                float _BackfaceNormalMode;
                 float _Metallic;
                 float _OcclusionStrength;
                 float _SmoothnessTextureChannel;
@@ -118,12 +129,13 @@ Shader "LoogaSoft/Bark"
                 return output;
             }
 
-            FragmentOutput Frag(Varyings input)
+            FragmentOutput Frag(Varyings input, bool isFrontFace : SV_IsFrontFace)
             {
                 FragmentOutput outGBuffer;
                 
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
+                if (_AlphaClip > 0.5) clip(albedo.a - _Cutoff);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
 
                 half metallic = 0.0;
                 half occlusion = 1.0;
@@ -146,11 +158,12 @@ Shader "LoogaSoft/Bark"
                         baseSmoothness = metallicSample.a * _BaseSmoothnessScale;
                 #endif
 
-                half3 normalTS = UnpackNormalScale(normalSample, _NormalScale);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 half sign = input.tangentWS.w * GetOddNegativeScale();
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS));
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 half3 diffuseColor = albedo.rgb * (1.0 - metallic);
                 half3 ambientDiffuse = EvaluateLoogaAmbientDiffuse(diffuseColor, normalWS, occlusion);
@@ -182,7 +195,7 @@ Shader "LoogaSoft/Bark"
             Tags { "LightMode" = "UniversalForward" }
 
             ZWrite On 
-            Cull Back
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex VertForward
@@ -196,8 +209,8 @@ Shader "LoogaSoft/Bark"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "LoogaWind.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaMasterLighting.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaMasterLighting.hlsl"
 
             struct AttributesForward 
             { 
@@ -217,7 +230,7 @@ Shader "LoogaSoft/Bark"
             };
 
             TEXTURE2D(_BaseMap);    SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_NormalMap);  SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_BumpMap);  SAMPLER(sampler_BumpMap);
             TEXTURE2D(_MetallicMap);
             TEXTURE2D(_OcclusionMap);
             TEXTURE2D(_MaskMap);    SAMPLER(sampler_MaskMap);
@@ -225,7 +238,10 @@ Shader "LoogaSoft/Bark"
             
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
-                float _NormalScale;
+                float _AlphaClip;
+                float _Cutoff;
+                float _BumpScale;
+                float _BackfaceNormalMode;
                 float _Metallic;
                 float _OcclusionStrength;
                 float _SmoothnessTextureChannel;
@@ -253,11 +269,12 @@ Shader "LoogaSoft/Bark"
                 return output;
             }
 
-            half4 FragForward(VaryingsForward input) : SV_Target
+            half4 FragForward(VaryingsForward input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 half4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+                if (_AlphaClip > 0.5) clip(albedoSample.a - _Cutoff);
                 half3 albedo = albedoSample.rgb;
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
                 
                 half metallic = 0.0;
                 half occlusion = 1.0;
@@ -280,11 +297,12 @@ Shader "LoogaSoft/Bark"
                         baseSmoothness = metallicSample.a * _BaseSmoothnessScale;
                 #endif
 
-                half3 normalTS = UnpackNormalScale(normalSample, _NormalScale);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 half sign = input.tangentWS.w * GetOddNegativeScale();
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS));
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 half perceptualRoughness = 1.0 - baseSmoothness;
                 half3 f0 = lerp(kDielectricSpec.rgb, albedo, metallic);
@@ -332,7 +350,7 @@ Shader "LoogaSoft/Bark"
             
             ZWrite Off 
             ZTest Equal 
-            Cull Back 
+            Cull [_Cull]
 
             HLSLPROGRAM 
             #pragma vertex VertProfile 

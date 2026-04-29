@@ -4,8 +4,15 @@ Shader "LoogaSoft/Skin"
     {
         [MainTexture] _BaseMap ("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
-        _NormalMap ("Normal Map", 2D) = "bump" {}
-        _NormalScale ("Normal Scale", Float) = 1.0
+        [Enum(Specular, 0, Metallic, 1)] _WorkflowMode ("Workflow Mode", Float) = 1.0
+        [Enum(Opaque, 0, Transparent, 1)] _Surface ("Surface Type", Float) = 0.0
+        _Cull ("Render Face", Float) = 2.0
+        [Enum(Mirror, 0, Flip, 1)] _BackfaceNormalMode ("Backface Normals", Float) = 0.0
+        [ToggleUI] _AlphaClip ("Alpha Clipping", Float) = 0.0
+        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+        [ToggleUI] _ReceiveShadows ("Receive Shadows", Float) = 1.0
+        _BumpMap ("Normal Map", 2D) = "bump" {}
+        _BumpScale ("Normal Scale", Float) = 1.0
         
         [Toggle(_USE_MASK_MAP)] _UseMaskMap ("Use Mask Map", Float) = 0.0
         _MaskMap ("Mask (R:Met, G:AO, A:Smooth)", 2D) = "white" {}
@@ -15,7 +22,7 @@ Shader "LoogaSoft/Skin"
         _OcclusionStrength ("Occlusion Strength", Range(0, 1)) = 1.0
         [Enum(Met Alpha, 0, Alb Alpha, 1)] _SmoothnessTextureChannel ("Smoothness Source", Float) = 0.0
         _BaseSmoothnessScale ("Smoothness", Range(0, 1)) = 0.5
-        _EmissionMap("Emission Map", 2D) = "black" {}
+        _EmissionMap("Emission Map", 2D) = "white" {}
         [HDR] _EmissionColor ("Emission Color", Color) = (0, 0, 0, 1)
         
         _CavityMap ("Cavity/Lobe Mask (R)", 2D) = "white" {}
@@ -41,25 +48,27 @@ Shader "LoogaSoft/Skin"
             Name "GBuffer"
             Tags { "LightMode" = "UniversalGBuffer" }
             Stencil { Ref 128 Comp Always Pass Replace }
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma shader_feature_local _USE_MASK_MAP
             #pragma shader_feature_local _USE_SSSS
+            #pragma shader_feature_local _EMISSION
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 normalWS : TEXCOORD1; float4 tangentWS : TEXCOORD3; };
 
-            TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap); TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap); TEXTURE2D(_MetallicMap); TEXTURE2D(_OcclusionMap); TEXTURE2D(_MaskMap); SAMPLER(sampler_MaskMap); TEXTURE2D(_EmissionMap); TEXTURE2D(_CavityMap); SAMPLER(sampler_CavityMap); TEXTURE2D(_ThicknessMap);
+            TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap); TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap); TEXTURE2D(_MetallicMap); TEXTURE2D(_OcclusionMap); TEXTURE2D(_MaskMap); SAMPLER(sampler_MaskMap); TEXTURE2D(_EmissionMap); TEXTURE2D(_CavityMap); SAMPLER(sampler_CavityMap); TEXTURE2D(_ThicknessMap);
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor; float _NormalScale; float _Metallic; float _OcclusionStrength; float _SmoothnessTextureChannel; float _BaseSmoothnessScale; float4 _EmissionColor; float _SecondarySmoothness; float _LobeMix; float4 _SubsurfaceColor; float _ScatterWidth; float _TransmissionStrength;
+                float4 _BaseColor; float _AlphaClip; float _Cutoff; float _BumpScale; float _BackfaceNormalMode; float _Metallic; float _OcclusionStrength; float _SmoothnessTextureChannel; float _BaseSmoothnessScale; float4 _EmissionColor; float _SecondarySmoothness; float _LobeMix; float4 _SubsurfaceColor; float _ScatterWidth; float _TransmissionStrength;
             CBUFFER_END
 
             struct FragmentOutput { half4 GBuffer0 : SV_Target0; half4 GBuffer1 : SV_Target1; half4 GBuffer2 : SV_Target2; half4 GBuffer3 : SV_Target3; };
@@ -76,11 +85,12 @@ Shader "LoogaSoft/Skin"
                 return output;
             }
 
-            FragmentOutput Frag(Varyings input)
+            FragmentOutput Frag(Varyings input, bool isFrontFace : SV_IsFrontFace)
             {
                 FragmentOutput outGBuffer;
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
+                if (_AlphaClip > 0.5) clip(albedo.a - _Cutoff);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
                 half cavitySample = SAMPLE_TEXTURE2D(_CavityMap, sampler_CavityMap, input.uv).r;
 
                 half metallic = 0.0; half occlusion = 1.0; half baseSmoothness = 0.5;
@@ -93,14 +103,18 @@ Shader "LoogaSoft/Skin"
                     occlusion = lerp(1.0, occlusionSample.g, _OcclusionStrength); baseSmoothness = (_SmoothnessTextureChannel == 1.0) ? (albedo.a * _BaseSmoothnessScale) : (metallicSample.a * _BaseSmoothnessScale);
                 #endif
 
-                half3 normalTS = UnpackNormalScale(normalSample, _NormalScale);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 half sign = input.tangentWS.w * GetOddNegativeScale(); 
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS)); 
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 half secondaryRoughness = 1.0 - _SecondarySmoothness; half finalLobeMix = cavitySample * _LobeMix;
-                half3 emission = SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, input.uv).rgb * _EmissionColor.rgb;
+                half3 emission = 0.0;
+                #if defined(_EMISSION)
+                    emission = SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, input.uv).rgb * _EmissionColor.rgb;
+                #endif
                 half3 diffuseColor = albedo.rgb * (1.0 - metallic);
                 half3 ambientDiffuse = EvaluateLoogaAmbientDiffuse(diffuseColor, normalWS, occlusion);
 
@@ -127,29 +141,30 @@ Shader "LoogaSoft/Skin"
             Tags { "LightMode" = "UniversalForward" }
             Blend SrcAlpha OneMinusSrcAlpha 
             ZWrite On 
-            Cull Back
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex VertForward
             #pragma fragment FragForward
             #pragma shader_feature_local _USE_MASK_MAP
             #pragma shader_feature_local _USE_SSSS
+            #pragma shader_feature_local _EMISSION
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _SHADOWS_SOFT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaMasterLighting.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaMasterLighting.hlsl"
 
             struct AttributesForward { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; };
             struct VaryingsForward { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; float2 uv : TEXCOORD1; float3 normalWS : TEXCOORD3; float4 tangentWS : TEXCOORD4; };
 
-            TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap); TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap); TEXTURE2D(_MetallicMap); TEXTURE2D(_OcclusionMap); TEXTURE2D(_MaskMap); SAMPLER(sampler_MaskMap); TEXTURE2D(_EmissionMap); TEXTURE2D(_CavityMap); SAMPLER(sampler_CavityMap); TEXTURE2D(_ThicknessMap);
+            TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap); TEXTURE2D(_BumpMap); SAMPLER(sampler_BumpMap); TEXTURE2D(_MetallicMap); TEXTURE2D(_OcclusionMap); TEXTURE2D(_MaskMap); SAMPLER(sampler_MaskMap); TEXTURE2D(_EmissionMap); TEXTURE2D(_CavityMap); SAMPLER(sampler_CavityMap); TEXTURE2D(_ThicknessMap);
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor; float _NormalScale; float _Metallic; float _OcclusionStrength; float _SmoothnessTextureChannel; float _BaseSmoothnessScale; float4 _EmissionColor; float _SecondarySmoothness; float _LobeMix; float4 _SubsurfaceColor; float _ScatterWidth; float _TransmissionStrength;
+                float4 _BaseColor; float _AlphaClip; float _Cutoff; float _BumpScale; float _BackfaceNormalMode; float _Metallic; float _OcclusionStrength; float _SmoothnessTextureChannel; float _BaseSmoothnessScale; float4 _EmissionColor; float _SecondarySmoothness; float _LobeMix; float4 _SubsurfaceColor; float _ScatterWidth; float _TransmissionStrength;
             CBUFFER_END
 
             VaryingsForward VertForward(AttributesForward input)
@@ -165,18 +180,20 @@ Shader "LoogaSoft/Skin"
                 return output;
             }
 
-            half4 FragForward(VaryingsForward input) : SV_Target
+            half4 FragForward(VaryingsForward input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 half4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+                if (_AlphaClip > 0.5) clip(albedoSample.a - _Cutoff);
                 half3 albedo = albedoSample.rgb; 
                 half alpha = albedoSample.a;
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
-                half3 normalTS = UnpackNormalScale(normalSample, _NormalScale);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 
                 half sign = input.tangentWS.w * GetOddNegativeScale(); 
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS)); 
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
                 
                 half metallic = 0.0; half occlusion = 1.0; half baseSmoothness = 0.5;
                 #if defined(_USE_MASK_MAP)
@@ -228,7 +245,9 @@ Shader "LoogaSoft/Skin"
                 half indirectOcclusion = GetLoogaMetalIndirectOcclusion(occlusion, metallic);
                 color += EvaluateGlobalLoogaIndirect(f0, perceptualRoughness, indirectOcclusion, viewDirWS, normalWS, normalWS, NoV, input.positionWS, input.uv);
                 color += EvaluateLoogaMetalAmbientReflection(f0, metallic, perceptualRoughness, normalWS, normalWS, viewDirWS, NoV, occlusion);
-                color += SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, input.uv).rgb * _EmissionColor.rgb;
+                #if defined(_EMISSION)
+                    color += SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, input.uv).rgb * _EmissionColor.rgb;
+                #endif
                 
                 return half4(color, alpha);
             }
@@ -242,7 +261,7 @@ Shader "LoogaSoft/Skin"
             
             ZWrite Off 
             ZTest Equal 
-            Cull Back 
+            Cull [_Cull]
 
             HLSLPROGRAM 
             #pragma vertex VertProfile 
@@ -292,6 +311,7 @@ Shader "LoogaSoft/Skin"
             HLSLPROGRAM 
             #pragma vertex UniversalVertexMeta 
             #pragma fragment UniversalFragmentMetaLit 
+            #pragma shader_feature_local _EMISSION
             #pragma shader_feature EDITOR_VISUALIZATION 
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl" 

@@ -3,8 +3,15 @@ Shader "LoogaSoft/Grass"
     Properties
     {
         [MainTexture] _BaseMap ("Albedo & Alpha", 2D) = "white" {}
+        [Enum(Specular, 0, Metallic, 1)] _WorkflowMode ("Workflow Mode", Float) = 1.0
+        [Enum(Opaque, 0, Transparent, 1)] _Surface ("Surface Type", Float) = 0.0
+        _Cull ("Render Face", Float) = 0.0
+        [Enum(Mirror, 0, Flip, 1)] _BackfaceNormalMode ("Backface Normals", Float) = 1.0
+        [ToggleUI] _AlphaClip ("Alpha Clipping", Float) = 1.0
+        [ToggleUI] _ReceiveShadows ("Receive Shadows", Float) = 1.0
         _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
-        _NormalMap ("Normal Map", 2D) = "bump" {}
+        _BumpMap ("Normal Map", 2D) = "bump" {}
+        _BumpScale ("Normal Scale", Float) = 1.0
         _Smoothness ("Smoothness", Range(0, 1)) = 0.1
         
         [Toggle(_USE_SSSS)] _UseSSSS ("Enable SSSS", Float) = 1.0
@@ -37,7 +44,7 @@ Shader "LoogaSoft/Grass"
     SubShader
     {
         Tags { "RenderType" = "TransparentCutout" "RenderPipeline" = "UniversalPipeline" "Queue" = "AlphaTest" }
-        Cull Off 
+        Cull [_Cull]
 
         // =========================================================
         // 1. GBUFFER PASS
@@ -56,7 +63,7 @@ Shader "LoogaSoft/Grass"
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             
             #include "LoogaFoliageCore.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
 
             FoliageVaryings Vert(FoliageAttributes input)
             {
@@ -97,20 +104,20 @@ Shader "LoogaSoft/Grass"
                 FragmentOutput outGBuffer;
                 
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv); 
-                clip(albedo.a - _Cutoff); 
+                if (_AlphaClip > 0.5) clip(albedo.a - _Cutoff);
                 
                 half3 finalAlbedo = GetVariedColor(albedo.rgb, input.positionWS); 
                 half3 windTintedColor = finalAlbedo * _WindTint.rgb; 
                 finalAlbedo = lerp(finalAlbedo, windTintedColor, input.windGust * _WindTintStrength);
 
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv); 
-                half3 normalTS = UnpackNormal(normalSample);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 
                 half sign = input.tangentWS.w * GetOddNegativeScale(); 
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS)); 
                 normalWS = NormalizeNormalPerPixel(normalWS); 
-                normalWS = isFrontFace ? normalWS : -normalWS;
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 half3 ambientDiffuse = EvaluateLoogaAmbientDiffuse(finalAlbedo, normalWS, 1.0);
 
@@ -141,7 +148,7 @@ Shader "LoogaSoft/Grass"
             Tags { "LightMode" = "UniversalForward" }
             
             ZWrite On 
-            Cull Off
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex VertForward
@@ -152,8 +159,8 @@ Shader "LoogaSoft/Grass"
             #pragma multi_compile _ _SHADOWS_SOFT
             
             #include "LoogaFoliageCore.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaLightingHelpers.hlsl"
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaMasterLighting.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaLightingHelpers.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaMasterLighting.hlsl"
 
             FoliageVaryings VertForward(FoliageAttributes input)
             {
@@ -184,20 +191,20 @@ Shader "LoogaSoft/Grass"
             half4 FragForward(FoliageVaryings input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 half4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv); 
-                clip(albedoSample.a - _Cutoff); 
+                if (_AlphaClip > 0.5) clip(albedoSample.a - _Cutoff);
                 
                 half3 finalAlbedo = GetVariedColor(albedoSample.rgb, input.positionWS); 
                 half3 windTintedColor = finalAlbedo * _WindTint.rgb; 
                 finalAlbedo = lerp(finalAlbedo, windTintedColor, input.windGust * _WindTintStrength);
 
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv); 
-                half3 normalTS = UnpackNormal(normalSample);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 
                 half sign = input.tangentWS.w * GetOddNegativeScale(); 
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS)); 
                 normalWS = NormalizeNormalPerPixel(normalWS); 
-                normalWS = isFrontFace ? normalWS : -normalWS;
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 half perceptualRoughness = 1.0 - _Smoothness; 
                 half3 f0 = kDielectricSpec.rgb;
@@ -242,7 +249,7 @@ Shader "LoogaSoft/Grass"
             
             ZWrite Off 
             ZTest LEqual 
-            Cull Off 
+            Cull [_Cull]
 
             HLSLPROGRAM 
             #pragma vertex VertProfile 
@@ -268,7 +275,7 @@ Shader "LoogaSoft/Grass"
                     discard; 
                 #endif 
                 
-                clip(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a - _Cutoff); 
+                if (_AlphaClip > 0.5) clip(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a - _Cutoff);
                 
                 half3 finalSSSS = GetVariedColor(_SubsurfaceColor.rgb, input.positionWS); 
                 return half4(finalSSSS, _ScatterWidth / 5.0); 

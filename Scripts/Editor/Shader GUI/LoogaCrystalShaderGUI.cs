@@ -11,7 +11,8 @@ namespace LoogaSoft.LightingPrime.Editor
             DrawLoogaSoftHeader();
 
             MaterialProperty baseColor = FindProperty("_BaseColor", properties);
-            MaterialProperty normalMap = FindProperty("_NormalMap", properties);
+            MaterialProperty normalMap = FindProperty("_BumpMap", properties);
+            MaterialProperty normalScale = FindProperty("_BumpScale", properties);
             MaterialProperty smoothness = FindProperty("_Smoothness", properties);
             
             MaterialProperty innerMap = FindProperty("_InnerMap", properties);
@@ -27,11 +28,13 @@ namespace LoogaSoft.LightingPrime.Editor
             MaterialProperty specHighlights = FindProperty("_SpecularHighlights", properties, false);
             MaterialProperty envReflections = FindProperty("_EnvironmentReflections", properties, false);
 
-            Section("Crystal Surface", "LoogaCrystal_Surface", true, () =>
+            DrawSurfaceOptionsSection(materialEditor, properties, "LoogaCrystal_SurfaceOptions");
+
+            Section("Surface Inputs", "LoogaCrystal_SurfaceInputs", true, () =>
             {
                 materialEditor.ShaderProperty(baseColor, "Outer Shell Tint & Opacity");
                 EditorGUILayout.Space(2);
-                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map (Facets & Scratches)"), normalMap);
+                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map (Facets & Scratches)"), normalMap, normalScale);
                 EditorGUILayout.Space(2);
                 materialEditor.ShaderProperty(smoothness, "Surface Smoothness");
             });

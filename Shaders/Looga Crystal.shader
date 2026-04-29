@@ -3,7 +3,15 @@ Shader "LoogaSoft/Crystal"
     Properties
     {
         [MainColor] _BaseColor ("Outer Shell Tint", Color) = (0.2, 0.8, 0.4, 0.5)
-        _NormalMap ("Surface Normal", 2D) = "bump" {}
+        [Enum(Specular, 0, Metallic, 1)] _WorkflowMode ("Workflow Mode", Float) = 1.0
+        [Enum(Opaque, 0, Transparent, 1)] _Surface ("Surface Type", Float) = 1.0
+        _Cull ("Render Face", Float) = 2.0
+        [Enum(Mirror, 0, Flip, 1)] _BackfaceNormalMode ("Backface Normals", Float) = 0.0
+        [ToggleUI] _AlphaClip ("Alpha Clipping", Float) = 0.0
+        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+        [ToggleUI] _ReceiveShadows ("Receive Shadows", Float) = 1.0
+        _BumpMap ("Surface Normal", 2D) = "bump" {}
+        _BumpScale ("Normal Scale", Float) = 1.0
         _Smoothness ("Outer Smoothness", Range(0.0, 1.0)) = 0.95
 
         [NoScaleOffset] _InnerMap ("Inner Cloud/Fractal Texture", 2D) = "white" {}
@@ -26,7 +34,7 @@ Shader "LoogaSoft/Crystal"
         
         Blend One Zero 
         ZWrite Off
-        Cull Back
+        Cull [_Cull]
 
         // =========================================================
         // 1. FORWARD LIT PASS (Transparents only run in Forward)
@@ -52,7 +60,7 @@ Shader "LoogaSoft/Crystal"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
             
             // NEW: Use the global switchboard
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaMasterLighting.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaMasterLighting.hlsl"
 
             struct AttributesCrystal
             {
@@ -74,12 +82,14 @@ Shader "LoogaSoft/Crystal"
                 float3 positionWS   : TEXCOORD6;
             };
 
-            TEXTURE2D(_NormalMap);  SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_BumpMap);  SAMPLER(sampler_BumpMap);
             TEXTURE2D(_InnerMap);   SAMPLER(sampler_InnerMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
                 float4 _InnerColor;
+                float _BumpScale;
+                float _BackfaceNormalMode;
                 float _ParallaxDepth;
                 float _ThicknessInfluence;
                 float _EdgeSharpness;
@@ -110,16 +120,17 @@ Shader "LoogaSoft/Crystal"
                 return output;
             }
 
-            half4 Frag(VaryingsCrystal input) : SV_Target
+            half4 Frag(VaryingsCrystal input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 // 1. Outer Surface Normal
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
-                half3 normalTS = UnpackNormal(normalSample);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 
                 half sign = input.tangentWS.w * GetOddNegativeScale();
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS));
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 // 2. Multi-Layer Volumetric Core (Parallax)
                 float2 parallaxVector = (input.viewDirTS.xy - normalTS.xy * 0.3) * _ParallaxDepth;

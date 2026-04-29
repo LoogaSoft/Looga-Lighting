@@ -4,8 +4,16 @@ Shader "LoogaSoft/Glass"
     {
         [MainTexture] _BaseMap ("Dirt Albedo (RGB) & Opacity (A)", 2D) = "black" {}
         [MainColor] _BaseColor ("Glass Tint Color", Color) = (0.9, 0.95, 1.0, 1.0)
+        [Enum(Specular, 0, Metallic, 1)] _WorkflowMode ("Workflow Mode", Float) = 1.0
+        [Enum(Opaque, 0, Transparent, 1)] _Surface ("Surface Type", Float) = 1.0
+        _Cull ("Render Face", Float) = 2.0
+        [Enum(Mirror, 0, Flip, 1)] _BackfaceNormalMode ("Backface Normals", Float) = 0.0
+        [ToggleUI] _AlphaClip ("Alpha Clipping", Float) = 0.0
+        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+        [ToggleUI] _ReceiveShadows ("Receive Shadows", Float) = 1.0
         
-        _NormalMap ("Normal Map", 2D) = "bump" {}
+        _BumpMap ("Normal Map", 2D) = "bump" {}
+        _BumpScale ("Normal Scale", Float) = 1.0
         
         [Toggle(_USE_MASK_MAP)] _UseMaskMap ("Use Mask Map", Float) = 0.0
         _MaskMap ("Mask Map (R:Metallic, G:AO, A:Smoothness)", 2D) = "white" {}
@@ -30,7 +38,7 @@ Shader "LoogaSoft/Glass"
         
         Blend One Zero 
         ZWrite Off
-        Cull Back
+        Cull [_Cull]
 
         // =========================================================
         // 1. FORWARD LIT PASS
@@ -57,7 +65,7 @@ Shader "LoogaSoft/Glass"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
             
             // NEW: Use the global switchboard
-            #include "Packages/com.loogasoft.lightingprime/Includes/LoogaMasterLighting.hlsl"
+            #include "Packages/com.loogasoft.loogalighting/Includes/LoogaMasterLighting.hlsl"
 
             struct AttributesGlass
             {
@@ -79,13 +87,15 @@ Shader "LoogaSoft/Glass"
             };
 
             TEXTURE2D(_BaseMap);    SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_NormalMap);  SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_BumpMap);  SAMPLER(sampler_BumpMap);
             TEXTURE2D(_MaskMap);    SAMPLER(sampler_MaskMap);
             TEXTURE2D(_MetallicMap);
             TEXTURE2D(_OcclusionMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
+                float _BumpScale;
+                float _BackfaceNormalMode;
                 float _Distortion;
                 float _Smoothness;
                 float _Metallic;
@@ -110,11 +120,11 @@ Shader "LoogaSoft/Glass"
                 return output;
             }
 
-            half4 Frag(VaryingsGlass input) : SV_Target
+            half4 Frag(VaryingsGlass input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 // 1. Texture Sampling
                 half4 dirtSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
-                half4 normalSample = SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv);
+                half4 normalSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
                 
                 half metallic = 0.0;
                 half occlusion = 1.0;
@@ -143,11 +153,12 @@ Shader "LoogaSoft/Glass"
                 half3 f0 = lerp(half3(0.04, 0.04, 0.04), dirtSample.rgb, metallic);
 
                 // 2. Normal Mapping
-                half3 normalTS = UnpackNormal(normalSample);
+                half3 normalTS = UnpackNormalScale(normalSample, _BumpScale);
                 half sign = input.tangentWS.w * GetOddNegativeScale();
                 half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * sign;
                 half3 normalWS = TransformTangentToWorld(normalTS, half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS));
                 normalWS = NormalizeNormalPerPixel(normalWS);
+                normalWS = (!isFrontFace && _BackfaceNormalMode > 0.5) ? -normalWS : normalWS;
 
                 // 3. Physical Fresnel
                 float NoV = saturate(dot(normalWS, input.viewDirWS));

@@ -12,7 +12,8 @@ namespace LoogaSoft.LightingPrime.Editor
 
             MaterialProperty baseMap = FindProperty("_BaseMap", properties);
             MaterialProperty baseColor = FindProperty("_BaseColor", properties);
-            MaterialProperty normalMap = FindProperty("_NormalMap", properties);
+            MaterialProperty normalMap = FindProperty("_BumpMap", properties);
+            MaterialProperty normalScale = FindProperty("_BumpScale", properties);
             
             MaterialProperty useMaskMap = FindProperty("_UseMaskMap", properties);
             MaterialProperty maskMap = FindProperty("_MaskMap", properties);
@@ -30,11 +31,13 @@ namespace LoogaSoft.LightingPrime.Editor
             MaterialProperty specHighlights = FindProperty("_SpecularHighlights", properties, false);
             MaterialProperty envReflections = FindProperty("_EnvironmentReflections", properties, false);
 
-            Section("Surface Options", "LoogaGlass_SurfaceOptions", true, () =>
+            DrawSurfaceOptionsSection(materialEditor, properties, "LoogaGlass_SurfaceOptions");
+
+            Section("Surface Inputs", "LoogaGlass_SurfaceInputs", true, () =>
             {
                 materialEditor.TexturePropertySingleLine(new GUIContent("Dirt Map (RGB) Opacity (A)"), baseMap, baseColor);
                 EditorGUILayout.Space(2);
-                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap);
+                materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalScale);
                 EditorGUILayout.Space(2);
                 
                 // Mask Map Toggle Logic (Matching the Skin Shader)

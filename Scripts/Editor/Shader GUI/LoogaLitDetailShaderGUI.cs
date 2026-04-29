@@ -12,8 +12,8 @@ namespace LoogaSoft.LightingPrime.Editor
 
             MaterialProperty baseMap = FindProperty("_BaseMap", properties);
             MaterialProperty baseColor = FindProperty("_BaseColor", properties);
-            MaterialProperty normalMap = FindProperty("_NormalMap", properties);
-            MaterialProperty normalScale = FindProperty("_NormalScale", properties);
+            MaterialProperty normalMap = FindProperty("_BumpMap", properties);
+            MaterialProperty normalScale = FindProperty("_BumpScale", properties);
             MaterialProperty useMaskMap = FindProperty("_UseMaskMap", properties);
             MaterialProperty maskMap = FindProperty("_MaskMap", properties);
             MaterialProperty metallicMap = FindProperty("_MetallicMap", properties);
@@ -52,7 +52,9 @@ namespace LoogaSoft.LightingPrime.Editor
             MaterialProperty specHighlights = FindProperty("_SpecularHighlights", properties, false);
             MaterialProperty envReflections = FindProperty("_EnvironmentReflections", properties, false);
 
-            Section("Surface Options", "LoogaLitDetail_Surface", true, () =>
+            DrawSurfaceOptionsSection(materialEditor, properties, "LoogaLitDetail_SurfaceOptions");
+
+            Section("Surface Inputs", "LoogaLitDetail_SurfaceInputs", true, () =>
             {
                 materialEditor.TexturePropertySingleLine(new GUIContent("Base Map"), baseMap, baseColor);
                 materialEditor.TexturePropertySingleLine(new GUIContent("Normal Map"), normalMap, normalScale);
@@ -77,7 +79,7 @@ namespace LoogaSoft.LightingPrime.Editor
                 }
                 
                 EditorGUILayout.Space(2);
-                materialEditor.TexturePropertySingleLine(new GUIContent("Emission Map"), emissionMap, emissionColor);
+                DrawEmissionToggle(materialEditor, emissionMap, emissionColor, "_EMISSION", "Emission Map");
                 EditorGUILayout.Space();
                 materialEditor.TextureScaleOffsetProperty(baseMap);
             });
@@ -110,7 +112,7 @@ namespace LoogaSoft.LightingPrime.Editor
                 }
                 
                 EditorGUILayout.Space(2);
-                materialEditor.TexturePropertySingleLine(new GUIContent("Detail Emission Map"), detailEmissionMap, detailEmissionColor);
+                DrawEmissionToggle(materialEditor, detailEmissionMap, detailEmissionColor, "_DETAIL_EMISSION", "Detail Emission Map");
                 EditorGUILayout.Space();
                 materialEditor.TextureScaleOffsetProperty(detailBaseMap);
             });
