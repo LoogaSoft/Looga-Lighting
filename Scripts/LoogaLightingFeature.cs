@@ -9,9 +9,11 @@ using UnityEditor;
 
 namespace LoogaSoft.Lighting
 {
-    [DisallowMultipleRendererFeature("Looga Master Lighting")]
+    [DisallowMultipleRendererFeature("Looga Lighting")]
     public class LoogaLightingFeature : ScriptableRendererFeature
     {
+        private const string FeatureDisplayName = "Looga Lighting";
+
         public enum LightingModel
         {
             DisneyBurley = 0,
@@ -22,49 +24,59 @@ namespace LoogaSoft.Lighting
             OrenNayar = 5,
             Arkane = 6
         }
-        
-        [Header("Global Illumination & Models")]
-        public LightingModel activeLightingModel = LightingModel.DisneyBurley;
 
-        [Header("GTBN Settings")]
+        public enum GTBNDebugMode
+        {
+            Off = 0,
+            Occlusion = 1,
+            OcclusionLoss = 2,
+            BentNormal = 3,
+            BentNormalDifference = 4,
+            MaterialAO = 5,
+            CombinedAO = 6
+        }
+        
+        public LightingModel activeLightingModel = LightingModel.DisneyBurley;
+        
+        [InspectorName("Enable")]
         public bool enableGTBN = true;
-        [Range(0.1f, 1.0f)] public float gtbnRadius = 0.3f;
-        [Range(10f, 150f)] public float gtbnMaxRadiusPixels = 100f;
-        [Range(0.01f, 0.5f)] public float gtbnThickness = 0.2f;
-        [Range(0.0f, 3.0f)] public float gtbnIntensity = 1f;
-        [Range(1, 8)] public int gtbnSliceCount = 3;
-        [Range(2, 16)] public int gtbnStepCount = 8;
-        [Range(0.0f, 1.0f)] public float gtbnDirectLightStrength = 0.5f;
-        [Range(0, 4)] public int gtbnBlurRadius = 2;
+        [InspectorName("Debug Mode")] public GTBNDebugMode gtbnDebugMode = GTBNDebugMode.Off;
+        [InspectorName("Radius"), Range(0.1f, 1.0f)] public float gtbnRadius = 0.3f;
+        [InspectorName("Min Radius Pixels"), Range(1f, 64f)] public float gtbnMinRadiusPixels = 12f;
+        [InspectorName("Max Radius Pixels"), Range(10f, 150f)] public float gtbnMaxRadiusPixels = 100f;
+        [InspectorName("Intensity"), Range(0.0f, 3.0f)] public float gtbnIntensity = 1f;
+        [InspectorName("Slice Count"), Range(1, 8)] public int gtbnSliceCount = 3;
+        [InspectorName("Step Count"), Range(2, 16)] public int gtbnStepCount = 8;
+        [InspectorName("Direct Light Strength"), Range(0.0f, 1.0f)] public float gtbnDirectLightStrength = 0.5f;
+        [InspectorName("Blur Radius"), Range(0, 4)] public int gtbnBlurRadius = 2;
 
         [HideInInspector] public ComputeShader gtbnCompute;
         [HideInInspector] public ComputeShader gtbnBlurCompute;
-        [HideInInspector] public Shader gtbnApplyShader;
 
         private Material _activeLightingMaterial;
         private Material _ssssMaterial;
-        private Material _gtbnApplyMaterial;
 
         private LoogaGTBNPass _gtbnPass;
         private CustomLightingPass _customLightingPass;
 
         private static readonly int GlobalLightingModelID = Shader.PropertyToID("_LoogaLightingModel");
         private static readonly int GBufferNormalsAreOctID = Shader.PropertyToID("_LoogaGBufferNormalsAreOct");
+        private static readonly int GTBNDebugModeID = Shader.PropertyToID("_LoogaGTBNDebugMode");
 
         #if UNITY_EDITOR
         private void OnValidate()
         {
             bool needsSave = false;
 
+            if (name != FeatureDisplayName)
+            {
+                name = FeatureDisplayName;
+                needsSave = true;
+            }
+
             if (gtbnCompute == null) AssignCompute(ref gtbnCompute, "LoogaGTBN", ref needsSave);
             if (gtbnBlurCompute == null) AssignCompute(ref gtbnBlurCompute, "LoogaGTBNBlur", ref needsSave);
 
-            if (gtbnApplyShader == null)
-            {
-                gtbnApplyShader = Shader.Find("Hidden/LoogaSoft/ApplyGTBN");
-                if (gtbnApplyShader != null) needsSave = true;
-            }
-            
             if (needsSave) EditorUtility.SetDirty(this);
         }
 
@@ -82,6 +94,7 @@ namespace LoogaSoft.Lighting
 
         public override void Create()
         {
+            name = FeatureDisplayName;
             UpdateLightingState();
         }
 
@@ -109,10 +122,6 @@ namespace LoogaSoft.Lighting
                 else _customLightingPass.UpdateMaterials(this);
             }
 
-            // 2. GTBN Initialization
-            if (gtbnApplyShader == null) gtbnApplyShader = Shader.Find("Hidden/LoogaSoft/ApplyGTBN");
-            if (gtbnApplyShader != null && _gtbnApplyMaterial == null) _gtbnApplyMaterial = CoreUtils.CreateEngineMaterial(gtbnApplyShader);
-                
             if (_gtbnPass == null) _gtbnPass = new LoogaGTBNPass();
         }
 
@@ -123,18 +132,20 @@ namespace LoogaSoft.Lighting
 
             UpdateLightingState();
 
-            // 1. Enqueue GTBN 
-            if (enableGTBN && gtbnCompute != null && gtbnBlurCompute != null && _gtbnApplyMaterial != null)
+            // 1. Enqueue GTBN
+            if (enableGTBN && gtbnCompute != null && gtbnBlurCompute != null)
             {
                 Shader.EnableKeyword("_USE_GTBN");
                 Shader.SetGlobalFloat("_GTBNDirectLightStrength", gtbnDirectLightStrength);
-                
-                _gtbnPass.Setup(gtbnCompute, gtbnBlurCompute, _gtbnApplyMaterial, this, UsesAccurateGBufferNormals(renderer));
+                Shader.SetGlobalInteger(GTBNDebugModeID, (int)gtbnDebugMode);
+
+                _gtbnPass.Setup(gtbnCompute, gtbnBlurCompute, this, UsesAccurateGBufferNormals(renderer));
                 renderer.EnqueuePass(_gtbnPass);
             }
             else
             {
                 Shader.DisableKeyword("_USE_GTBN");
+                Shader.SetGlobalInteger(GTBNDebugModeID, 0);
             }
 
             // 2. Enqueue Deferred Lighting
@@ -148,8 +159,7 @@ namespace LoogaSoft.Lighting
         {
             if (_activeLightingMaterial != null) CoreUtils.Destroy(_activeLightingMaterial);
             if (_ssssMaterial != null) CoreUtils.Destroy(_ssssMaterial);
-            if (_gtbnApplyMaterial != null) CoreUtils.Destroy(_gtbnApplyMaterial);
-            
+
             _customLightingPass = null;
             _gtbnPass = null;
             base.Dispose(disposing);
@@ -173,10 +183,9 @@ namespace LoogaSoft.Lighting
         {
             private ComputeShader _gtbnCompute;
             private ComputeShader _blurCompute;
-            private Material _applyMaterial;
             private LoogaLightingFeature _feature;
             private bool _useAccurateGBufferNormals;
-            
+
             private int _gtbnKernel, _blurHKernel, _blurVKernel;
             private static readonly int GTBNTextureID = Shader.PropertyToID("_GTBNTexture");
 
@@ -185,14 +194,13 @@ namespace LoogaSoft.Lighting
                 renderPassEvent = RenderPassEvent.BeforeRenderingDeferredLights - 1;
             }
 
-            public void Setup(ComputeShader gtbnCompute, ComputeShader blurCompute, Material applyMaterial, LoogaLightingFeature feature, bool useAccurateGBufferNormals)
+            public void Setup(ComputeShader gtbnCompute, ComputeShader blurCompute, LoogaLightingFeature feature, bool useAccurateGBufferNormals)
             {
                 _gtbnCompute = gtbnCompute;
                 _blurCompute = blurCompute;
-                _applyMaterial = applyMaterial;
                 _feature = feature;
                 _useAccurateGBufferNormals = useAccurateGBufferNormals;
-                
+
                 if (_gtbnCompute != null) _gtbnKernel = _gtbnCompute.FindKernel("CSMain");
                 if (_blurCompute != null)
                 {
@@ -210,21 +218,15 @@ namespace LoogaSoft.Lighting
                 public bool useAccurateGBufferNormals;
             }
 
-            private class ApplyPassData
-            {
-                public Material material;
-                public TextureHandle gtbnSource;
-            }
-
             public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
             {
                 if (_gtbnCompute == null || _blurCompute == null) return;
-                
+
                 UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
                 UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-                
+
                 RenderTextureDescriptor desc = cameraData.cameraTargetDescriptor;
-                desc.colorFormat = RenderTextureFormat.ARGB32;
+                desc.colorFormat = RenderTextureFormat.ARGBHalf;
                 desc.depthBufferBits = 0;
                 desc.enableRandomWrite = true;
 
@@ -237,20 +239,20 @@ namespace LoogaSoft.Lighting
                     passData.normalsTexture = resourceData.gBuffer[2];
                     passData.gtbnTarget = gtbnTarget;
                     passData.blurPingPong = blurPingPong;
-                    
+
                     Matrix4x4 view = cameraData.camera.worldToCameraMatrix;
                     Matrix4x4 proj = cameraData.camera.projectionMatrix;
                     Matrix4x4 invView = cameraData.camera.cameraToWorldMatrix;
                     passData.projScale = 0.5f * cameraData.cameraTargetDescriptor.height * proj.m11;
-                    
+
                     if (passData.depthTexture.IsValid()) builder.UseTexture(passData.depthTexture, AccessFlags.Read);
                     if (passData.normalsTexture.IsValid()) builder.UseTexture(passData.normalsTexture, AccessFlags.Read);
-                    
+
                     builder.UseTexture(passData.gtbnTarget, AccessFlags.ReadWrite);
                     builder.UseTexture(passData.blurPingPong, AccessFlags.ReadWrite);
                     builder.SetGlobalTextureAfterPass(gtbnTarget, GTBNTextureID);
                     builder.AllowGlobalStateModification(true);
-                    
+
                     Matrix4x4 invProj = proj.inverse;
                     Vector3 GetViewRay(float ndcX, float ndcY)
                     {
@@ -258,7 +260,7 @@ namespace LoogaSoft.Lighting
                         Vector3 ray = new Vector3(viewPos.x, viewPos.y, viewPos.z) / viewPos.w;
                         return ray / -ray.z;
                     }
-                    
+
                     Vector3 bottomLeft = GetViewRay(-1f, -1f);
                     Vector3 bottomRight = GetViewRay(1f, -1f);
                     Vector3 topLeft = GetViewRay(-1f, 1f);
@@ -269,23 +271,23 @@ namespace LoogaSoft.Lighting
                     passData.viewMatrix = view;
                     passData.invViewMatrix = invView;
                     passData.useAccurateGBufferNormals = _useAccurateGBufferNormals;
-                    
+
                     builder.SetRenderFunc((PassData data, ComputeGraphContext context) =>
                     {
                         ComputeCommandBuffer cmd = context.cmd;
                         int threadGroupsX = Mathf.CeilToInt(cameraData.cameraTargetDescriptor.width / 8.0f);
                         int threadGroupsY = Mathf.CeilToInt(cameraData.cameraTargetDescriptor.height / 8.0f);
-                        
+
                         cmd.SetComputeMatrixParam(_gtbnCompute, "_ViewMatrix", data.viewMatrix);
                         cmd.SetComputeMatrixParam(_gtbnCompute, "_InvViewMatrix", data.invViewMatrix);
-                        
+
                         cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams1", new Vector4(_feature.gtbnRadius, _feature.gtbnMaxRadiusPixels, _feature.gtbnSliceCount, _feature.gtbnStepCount));
-                        cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams2", new Vector4(_feature.gtbnIntensity, _feature.gtbnThickness, data.projScale, 0));
+                        cmd.SetComputeVectorParam(_gtbnCompute, "_GTBNParams2", new Vector4(_feature.gtbnIntensity, 0, data.projScale, _feature.gtbnMinRadiusPixels));
                         cmd.SetComputeIntParam(_gtbnCompute, GBufferNormalsAreOctID, data.useAccurateGBufferNormals ? 1 : 0);
-                        
+
                         if (data.depthTexture.IsValid()) cmd.SetGlobalTexture("_CameraDepthTexture", data.depthTexture);
                         if (data.normalsTexture.IsValid()) cmd.SetGlobalTexture("_GBuffer2", data.normalsTexture);
-                        
+
                         cmd.SetComputeVectorParam(_gtbnCompute, "_CameraViewBottomLeftCorner", data.bottomLeftCorner);
                         cmd.SetComputeVectorParam(_gtbnCompute, "_CameraViewXExtent", data.xExtent);
                         cmd.SetComputeVectorParam(_gtbnCompute, "_CameraViewYExtent", data.yExtent);
@@ -306,22 +308,6 @@ namespace LoogaSoft.Lighting
                     });
                 }
 
-                using (var builder = renderGraph.AddRasterRenderPass<ApplyPassData>("Apply GTBN to GBuffer", out var passData))
-                {
-                    passData.material = _applyMaterial;
-                    passData.gtbnSource = gtbnTarget;
-                    
-                    builder.UseTexture(passData.gtbnSource, AccessFlags.Read);
-                    
-                    if (resourceData.gBuffer != null && resourceData.gBuffer.Length > 1 && resourceData.gBuffer[1].IsValid())
-                        builder.SetRenderAttachment(resourceData.gBuffer[1], 0, AccessFlags.ReadWrite);
-                    
-                    builder.SetRenderFunc((ApplyPassData data, RasterGraphContext context) =>
-                    {
-                        if (data.material != null)
-                            Blitter.BlitTexture(context.cmd, data.gtbnSource, new Vector4(1,1,0,0), data.material, 0);
-                    });
-                }
             }
         }
 
@@ -336,7 +322,7 @@ namespace LoogaSoft.Lighting
                 Shader.PropertyToID("_GBuffer0"), Shader.PropertyToID("_GBuffer1"),
                 Shader.PropertyToID("_GBuffer2"), Shader.PropertyToID("_GBuffer3")
             };
-            
+
             private static readonly int CameraDepthTextureID = Shader.PropertyToID("_CameraDepthTexture");
             private static readonly int SSSSProfileTextureID = Shader.PropertyToID("_SSSSProfileTexture");
             private static readonly ShaderTagId SSSSProfileTagId = new ShaderTagId("SSSSProfile");
@@ -348,14 +334,14 @@ namespace LoogaSoft.Lighting
             }
 
             public void UpdateMaterials(LoogaLightingFeature feature) => _feature = feature;
-            
+
             private class LightingPassData
             {
                 public Material material;
                 public TextureHandle[] gBuffers;
                 public TextureHandle depthTexture, ssssProfileTexture;
             }
-            
+
             private class SSSSPassData { public TextureHandle source; public Material material; public int passIndex; }
             private class DrawProfileData { public RendererListHandle rendererList; }
             private class BlitPassData { public TextureHandle source; }
@@ -364,16 +350,16 @@ namespace LoogaSoft.Lighting
             {
                 UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
                 UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-  
+
                 if (_feature._activeLightingMaterial == null) return;
-                
+
                 TextureHandle activeColor = resourceData.activeColorTexture;
                 TextureHandle hardwareDepth = resourceData.activeDepthTexture;
                 TextureHandle stencilTexture = resourceData.activeDepthTexture;
-                
+
                 RenderTextureDescriptor desc = cameraData.cameraTargetDescriptor;
                 desc.depthBufferBits = 0;
-                
+
                 TextureHandle tempLightingTarget = renderGraph.CreateTexture(new TextureDesc(desc)
                 {
                     name = "Looga Lighting Target", enableRandomWrite = true, clearBuffer = true, clearColor = Color.clear
@@ -423,13 +409,13 @@ namespace LoogaSoft.Lighting
                             }
                         }
                     }
-                    
+
                     if (passData.depthTexture.IsValid()) builder.UseTexture(passData.depthTexture, AccessFlags.Read);
                     if (passData.ssssProfileTexture.IsValid()) builder.UseTexture(passData.ssssProfileTexture, AccessFlags.Read);
 
                     builder.SetRenderAttachment(tempLightingTarget, 0, AccessFlags.Write);
                     builder.AllowGlobalStateModification(true);
-                    
+
                     builder.SetRenderFunc((LightingPassData data, RasterGraphContext context) =>
                     {
                         RasterCommandBuffer cmd = context.cmd;
@@ -438,7 +424,7 @@ namespace LoogaSoft.Lighting
                             for (int i = 0; i < data.gBuffers.Length; i++)
                                 if (data.gBuffers[i].IsValid()) cmd.SetGlobalTexture(ShaderGBufferIDs[i], data.gBuffers[i]);
                         }
-                        
+
                         if (data.depthTexture.IsValid()) cmd.SetGlobalTexture(CameraDepthTextureID, data.depthTexture);
                         if (data.ssssProfileTexture.IsValid()) cmd.SetGlobalTexture(SSSSProfileTextureID, data.ssssProfileTexture);
 
@@ -492,11 +478,11 @@ namespace LoogaSoft.Lighting
                 using (var builder = renderGraph.AddRasterRenderPass<BlitPassData>("Looga Lighting Blit", out var passData))
                 {
                     passData.source = tempLightingTarget;
-                    
+
                     builder.UseTexture(passData.source, AccessFlags.Read);
                     builder.SetRenderAttachment(activeColor, 0, AccessFlags.Write);
                     if (stencilTexture.IsValid()) builder.SetRenderAttachmentDepth(stencilTexture, AccessFlags.Write);
-                    
+
                     builder.SetRenderFunc((BlitPassData data, RasterGraphContext context) =>
                     {
                         RasterCommandBuffer cmd = context.cmd;
@@ -507,4 +493,40 @@ namespace LoogaSoft.Lighting
             }
         }
     }
+
+    #if UNITY_EDITOR
+    [CustomEditor(typeof(LoogaLightingFeature))]
+    internal sealed class LoogaLightingFeatureEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            serializedObject.Update();
+
+            EditorGUILayout.LabelField("Lighting Models", EditorStyles.boldLabel);
+            DrawProperty("activeLightingModel", "Active Lighting Model");
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("GTBN Settings", EditorStyles.boldLabel);
+            DrawProperty("enableGTBN", "Enable");
+            DrawProperty("gtbnDebugMode", "Debug Mode");
+            DrawProperty("gtbnRadius", "Radius");
+            DrawProperty("gtbnMinRadiusPixels", "Min Radius Pixels");
+            DrawProperty("gtbnMaxRadiusPixels", "Max Radius Pixels");
+            DrawProperty("gtbnIntensity", "Intensity");
+            DrawProperty("gtbnSliceCount", "Slice Count");
+            DrawProperty("gtbnStepCount", "Step Count");
+            DrawProperty("gtbnDirectLightStrength", "Direct Light Strength");
+            DrawProperty("gtbnBlurRadius", "Blur Radius");
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawProperty(string propertyName, string label)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                EditorGUILayout.PropertyField(property, new GUIContent(label));
+        }
+    }
+    #endif
 }

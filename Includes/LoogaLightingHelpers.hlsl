@@ -8,13 +8,14 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GlobalIllumination.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferCommon.hlsl"
 
-TEXTURE2D_X_HALF(_GBuffer0); 
-TEXTURE2D_X_HALF(_GBuffer1); 
-TEXTURE2D_X_HALF(_GBuffer2); 
-TEXTURE2D_X_HALF(_GBuffer3); 
-TEXTURE2D_X(_GTBNTexture);   
+TEXTURE2D_X_HALF(_GBuffer0);
+TEXTURE2D_X_HALF(_GBuffer1);
+TEXTURE2D_X_HALF(_GBuffer2);
+TEXTURE2D_X_HALF(_GBuffer3);
+TEXTURE2D_X(_GTBNTexture);
 
 float _GTBNDirectLightStrength;
+int _LoogaGTBNDebugMode;
 
 float SchlickFresnel(float input)
 {
@@ -117,13 +118,13 @@ float3 EvaluateLoogaMetalAmbientReflection(float3 f0, float metallic, float perc
     half3 reflectedAmbient = EvaluateLoogaAmbientProbe(roughReflectionWS);
     half3 normalAmbient = EvaluateLoogaAmbientProbe(normalWS);
     half3 ambientReflection = max(reflectedAmbient, normalAmbient);
-    
+
     half reflectivity = max(max(f0.r, f0.g), f0.b);
     half grazingTerm = saturate(1.0 - perceptualRoughness + reflectivity);
     half3 envFresnel = f0 + (grazingTerm - f0) * SchlickFresnel(NoV);
     half surfaceReduction = 1.0 / (perceptualRoughness * perceptualRoughness + 1.0);
     half indirectOcclusion = GetLoogaMetalIndirectOcclusion(occlusion, metallic);
-    
+
     return ambientReflection * envFresnel * surfaceReduction * indirectOcclusion * metalMask;
 }
 
@@ -162,21 +163,21 @@ float3 EvaluateTransmission(float3 ssssColor, float scatterWidth, float3 lightDi
 {
     if (transmissionMask <= 0.0) return float3(0,0,0);
 
-    float distortion = 0.2; 
+    float distortion = 0.2;
     float3 backlightDir = normalize(lightDir + normalWS * distortion);
-    
+
     // 1. Forward Scattering (The bright "sun-behind" glow)
     float transmissionPhase = saturate(dot(viewDirWS, -backlightDir));
     float scatterPower = lerp(12.0, 1.0, saturate(scatterWidth / 5.0));
     float directionalGlow = pow(transmissionPhase, scatterPower);
-    
+
     // 2. Internal Ambient Scattering (The omnidirectional glow)
     // We wrap the light slightly around the back normal so it glows even from the side
     float ambientGlow = saturate(dot(-normalWS, lightDir) * 0.5 + 0.5) * 0.2;
-    
+
     float transmissionProfile = directionalGlow + ambientGlow;
     float transmissionIntensity = transmissionProfile * (scatterWidth * 0.5);
-    
+
     float softShadow = saturate(shadowAttenuation + 0.35);
 
     // Apply the user's painted thickness mask and strength multiplier
